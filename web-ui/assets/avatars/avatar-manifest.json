@@ -1,0 +1,117 @@
+{
+  "version": "20261109-ui-v2",
+  "avatars": {
+    "codex": {
+      "key": "codex",
+      "name": "Codex Bolt ⚡",
+      "agent_id": "abab3492-1635-4ed0-9b56-111367eff554",
+      "canonical_name": "Codex",
+      "emoji": "⚡",
+      "bg_color": "#2b4a7a",
+      "desc": "深蓝闪电机器人 · 发光蓝眼睛 · 额头黄色闪电 · 天线光球",
+      "glb": "/assets/avatars/codex-bolt-3d-chibi-head.glb",
+      "glb_sha256": "7cadfea366da460d86e95f9baad30df445e54e13a06b87db99efccd3a63b8d45",
+      "glb_size": 334668,
+      "webp": "/assets/avatars/codex-bolt-3d-chibi-head.webp",
+      "webp_sha256": "bf1da2140035f83edacdd7165ea56ed305cc09fb389ab5b3a3448fc6ee67a073",
+      "webp_size": 272722,
+      "camera": {
+        "fov": 42,
+        "position": [
+          0,
+          0.6,
+          6.4
+        ],
+        "target": [
+          0,
+          0.35,
+          0
+        ]
+      }
+    },
+    "antigravity": {
+      "key": "antigravity",
+      "name": "Antigravity 🍩",
+      "agent_id": "dcbc38d2-d526-41c8-8327-c31805a090a2",
+      "canonical_name": "Antigravity",
+      "emoji": "🍩",
+      "bg_color": "#d96a7a",
+      "desc": "粉色甜甜圈发顶 · 彩色糖针 · 粉白卫衣 · 胸口小甜甜圈",
+      "glb": "/assets/avatars/antigravity-3d-chibi-head.glb",
+      "glb_sha256": "e5d84bedf34019bc901c78885ee5e1be4dc9b1dd4a190c54b1133498dd6bc457",
+      "glb_size": 696660,
+      "webp": "/assets/avatars/antigravity-3d-chibi-head.webp",
+      "webp_sha256": "392941b6e795c84e661df78f65c2f8da78b3b3d70fd5c9abe6ff5f411d9d8fb4",
+      "webp_size": 253362,
+      "camera": {
+        "fov": 42,
+        "position": [
+          0,
+          0.6,
+          6.4
+        ],
+        "target": [
+          0,
+          0.35,
+          0
+        ]
+      }
+    },
+    "opencode": {
+      "key": "opencode",
+      "name": "OpenCode 🍉",
+      "agent_id": "b2636e9b-6002-436b-9f13-853785924848",
+      "canonical_name": "OpenCode",
+      "emoji": "🍉",
+      "bg_color": "#2f9e4f",
+      "desc": "西瓜皮条纹帽 · 绿红西瓜夹克 · 胸口 {} 代码徽章",
+      "glb": "/assets/avatars/opencode-3d-chibi-head.glb",
+      "glb_sha256": "e63482e12c1c25626991baa1f48c75c2d409a6267484ababb7a64c7a413e227a",
+      "glb_size": 495652,
+      "webp": "/assets/avatars/opencode-3d-chibi-head.webp",
+      "webp_sha256": "da476f37761c8f0f1fb87a9cb05a9eb9bcea5936a0362143300363238a6cc261",
+      "webp_size": 212616,
+      "camera": {
+        "fov": 42,
+        "position": [
+          0,
+          0.6,
+          6.4
+        ],
+        "target": [
+          0,
+          0.35,
+          0
+        ]
+      }
+    },
+    "marley": {
+      "key": "marley",
+      "name": "Muse · Marley 🍍",
+      "agent_id": "42f39694-4517-4583-8b6b-96267c907158",
+      "canonical_name": "Muse",
+      "emoji": "🍍",
+      "bg_color": "#4f9a94",
+      "desc": "仙侠风少年 · 灰发束发带 · 灰蓝长袍水墨纹 · 金色小菠萝徽章",
+      "glb": "/assets/avatars/muse-marley-3d-chibi-head.glb",
+      "glb_sha256": "68e3cfdfedb049b059c08e47d5dc32c84ae06ddbb431fd204bd73b6752d826cc",
+      "glb_size": 783264,
+      "webp": "/assets/avatars/muse-marley-3d-chibi-head.webp",
+      "webp_sha256": "ea2cbf1c3073027cbf7f6f8b7cd920afe2e93d0fc147b9c873b103d629d710aa",
+      "webp_size": 313486,
+      "camera": {
+        "fov": 42,
+        "position": [
+          0,
+          0.6,
+          6.4
+        ],
+        "target": [
+          0,
+          0.35,
+          0
+        ]
+      }
+    }
+  }
+}

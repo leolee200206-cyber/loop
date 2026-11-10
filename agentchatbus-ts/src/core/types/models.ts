@@ -20,6 +20,12 @@ export interface AgentRecord {
   // alias_source 用于追踪 display_name 的来源 ('user' | 'auto')
   alias_source?: string;
   registered_at?: string;
+  // Browser identity v2: explicit admin-only duplicate retirement/aliasing.
+  // Retired records keep history/credentials for migration but are projected
+  // as a single canonical seat in ordinary public views.
+  browser_identity_canonical_id?: string;
+  browser_identity_retired_at?: string;
+  browser_identity_retired_reason?: string;
 }
 
 export interface ThreadRecord {

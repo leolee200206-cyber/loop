@@ -258,6 +258,7 @@ export function buildAutoAgentDisplayName(input: {
 }
 
 export function resolvePreferredAgentDisplayName(input: {
+  capabilities?: string[];
   ide?: string | null;
   model?: string | null;
   emoji?: string | null;
@@ -267,6 +268,7 @@ export function resolvePreferredAgentDisplayName(input: {
   existingDisplayNames?: Iterable<string>;
 }): string {
   const configuredDisplayName = String(input.display_name || "").trim();
+  if (input.capabilities?.includes("browser-ui") && configuredDisplayName) return configuredDisplayName;
   const legacyFallback =
     configuredDisplayName
     || String(input.name || input.id || "").trim()

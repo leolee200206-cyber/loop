@@ -1,0 +1,269 @@
+/**
+ * AgentChatBus - Directed Message Task Receipts System (task-receipts.css)
+ * Scoped micro-card presentation for real target task receipts & composer guidance.
+ *
+ * Truth in Status:
+ * - awaiting_ack: 待确认 (等待agent主动查看，尚未自动投递)
+ * - acknowledged: 已接单
+ * - running: 执行中
+ * - completed: 完成
+ * - failed: 失败
+ * - unavailable: 回执暂不可用 (404/网络异常降级)
+ * - browser target: 网页在线不表示模型执行
+ */
+
+:root {
+  --mtr-bg: rgba(255, 255, 255, 0.03);
+  --mtr-border: rgba(255, 255, 255, 0.08);
+  --mtr-text: var(--text-1, #f1f5f9);
+  --mtr-muted: var(--text-3, #94a3b8);
+}
+
+body[data-theme="light"] {
+  --mtr-bg: rgba(0, 0, 0, 0.02);
+  --mtr-border: rgba(0, 0, 0, 0.08);
+  --mtr-text: #0f172a;
+  --mtr-muted: #64748b;
+}
+
+/* ==========================================================================
+   Composer Task Guidance Bar
+   ========================================================================== */
+
+.compose-task-hint {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--mtr-muted);
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  background: var(--mtr-bg);
+  border: 1px solid var(--mtr-border);
+  border-radius: 6px;
+  line-height: 1.4;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.cth-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.cth-text {
+  min-width: 0;
+  flex: 1 1 180px;
+  overflow-wrap: anywhere;
+}
+
+.cth-web-warning {
+  color: #38bdf8;
+  font-weight: 500;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+}
+
+.cth-text-short { display: none; }
+@media (max-width: 640px) {
+  .compose-task-hint { gap: 2px; padding: 3px 5px; }
+  .compose-task-hint .cth-icon, .compose-task-hint .cth-text-full { display: none; }
+  .compose-task-hint .cth-text-short { display: block; flex-basis: auto; }
+  .cth-web-warning { overflow-wrap: anywhere; }
+}
+
+body[data-theme="light"] .cth-web-warning {
+  color: #0284c7;
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.3);
+}
+
+/* ==========================================================================
+   Message Task Receipts Container & Cards
+   ========================================================================== */
+
+.msg-task-receipts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 5px;
+  max-width: 100%;
+}
+
+.msg-task-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  box-sizing: border-box;
+  background: var(--mtr-bg);
+  border: 1px solid var(--mtr-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.msg-task-receipt:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+body[data-theme="light"] .msg-task-receipt {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+body[data-theme="light"] .msg-task-receipt:hover {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.mtr-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mtr-target-icon {
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.mtr-target-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  color: var(--mtr-text);
+  font-size: 11.5px;
+}
+
+.mtr-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+/* Status variants */
+.mtr-status-badge--awaiting_ack {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+body[data-theme="light"] .mtr-status-badge--awaiting_ack {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(217, 119, 6, 0.5);
+  color: #b45309;
+}
+
+.mtr-status-badge--acknowledged {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #818cf8;
+}
+
+body[data-theme="light"] .mtr-status-badge--acknowledged {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(79, 70, 229, 0.4);
+  color: #4f46e5;
+}
+
+.mtr-status-badge--running {
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  color: #38bdf8;
+}
+
+body[data-theme="light"] .mtr-status-badge--running {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(2, 132, 199, 0.4);
+  color: #0284c7;
+}
+
+.mtr-status-badge--completed {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+body[data-theme="light"] .mtr-status-badge--completed {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(5, 150, 105, 0.4);
+  color: #059669;
+}
+
+.mtr-status-badge--failed {
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+}
+
+body[data-theme="light"] .mtr-status-badge--failed {
+  background: rgba(244, 63, 94, 0.14);
+  border-color: rgba(225, 29, 72, 0.4);
+  color: #e11d48;
+}
+
+.mtr-status-badge--unavailable {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
+}
+
+body[data-theme="light"] .mtr-status-badge--unavailable {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(100, 116, 139, 0.3);
+  color: #475569;
+}
+
+.mtr-desc {
+  color: var(--mtr-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.mtr-browser-warning {
+  align-self: flex-start;
+  color: #38bdf8;
+  font-size: 10px;
+  background: rgba(14, 165, 233, 0.08);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-top: 2px;
+}
+
+body[data-theme="light"] .mtr-browser-warning {
+  color: #0284c7;
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.25);
+}
+
+/* ==========================================================================
+   Mobile & Accessibility Overrides
+   ========================================================================== */
+
+@media (pointer: coarse) {
+  .msg-task-receipt {
+    min-height: 44px;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-task-receipt {
+    transition: none !important;
+  }
+}

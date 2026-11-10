@@ -98,7 +98,7 @@
   const DEFAULT_THREAD_LAUNCH_INTERVAL_SECONDS = 2;
   const MAX_THREAD_LAUNCH_AGENTS = 4;
   const THREAD_LAUNCH_ADAPTER_STORAGE_KEY = "acb.threadLaunchAdapters.v1";
-  const THREAD_LAUNCH_MODEL_CACHE_KEY = "acb.threadLaunchModels.v2";
+  const THREAD_LAUNCH_MODEL_CACHE_KEY = "acb.threadLaunchModels.v3";
   const THREAD_LAUNCH_SELECTIONS_STORAGE_KEY = "acb.threadLaunchSelections.v1";
   // Keep this list aligned with agentchatbus-ts/src/main.ts and src/main.py so
   // the launch picker matches the server-side deterministic emoji pool.
@@ -199,11 +199,11 @@
     return {
       fetched_at: null,
       providers: {
-        codex: { adapter: "codex", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Static fallback" },
-        cursor: { adapter: "cursor", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Static fallback" },
-        claude: { adapter: "claude", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Static fallback" },
-        gemini: { adapter: "gemini", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Static fallback" },
-        copilot: { adapter: "copilot", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Static fallback" },
+        codex: { adapter: "codex", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Client default / manual model ID" },
+        cursor: { adapter: "cursor", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Client default / manual model ID" },
+        claude: { adapter: "claude", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Client default / manual model ID" },
+        gemini: { adapter: "gemini", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Client default / manual model ID" },
+        copilot: { adapter: "copilot", status: "ready", strategy: "static", models: [], fetched_at: "", source_label: "Client default / manual model ID" },
       },
     };
   }
@@ -1636,6 +1636,8 @@
   }
 
   function buildLaunchPromptPreview({ topic, threadId, config, isFirstAgent }) {
+    const adapter = String(config?.adapter || "claude");
+    const mode = String(config?.mode || "direct");
     const participantName = buildDefaultParticipantName(config);
     const initialInstruction = getResolvedThreadLaunchInstruction({ topic, config, isFirstAgent });
     const roleLabel = isFirstAgent ? "administrator" : "participant";

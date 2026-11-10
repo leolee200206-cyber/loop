@@ -1,0 +1,42 @@
+[
+  {
+    "name": "rotatable-3d-avatars.html",
+    "size": 12656,
+    "expected_size": 12656,
+    "sha256": "12e14ae1e8503ed558ba3c20079f1d601f64942ec3fe5e41426b064bac93613f",
+    "is_glb_valid": null,
+    "header_hex": "3c21444f43545950452068746d6c3e0a"
+  },
+  {
+    "name": "codex-bolt-3d-chibi-head.glb",
+    "size": 334668,
+    "expected_size": 334668,
+    "sha256": "7cadfea366da460d86e95f9baad30df445e54e13a06b87db99efccd3a63b8d45",
+    "is_glb_valid": true,
+    "header_hex": "676c5446020000004c1b0500b02f0000"
+  },
+  {
+    "name": "antigravity-3d-chibi-head.glb",
+    "size": 696660,
+    "expected_size": 696660,
+    "sha256": "e5d84bedf34019bc901c78885ee5e1be4dc9b1dd4a190c54b1133498dd6bc457",
+    "is_glb_valid": true,
+    "header_hex": "676c54460200000054a10a00c8bb0000"
+  },
+  {
+    "name": "opencode-3d-chibi-head.glb",
+    "size": 495652,
+    "expected_size": 495652,
+    "sha256": "e63482e12c1c25626991baa1f48c75c2d409a6267484ababb7a64c7a413e227a",
+    "is_glb_valid": true,
+    "header_hex": "676c5446020000002490070010510000"
+  },
+  {
+    "name": "muse-marley-3d-chibi-head.glb",
+    "size": 783264,
+    "expected_size": 783264,
+    "sha256": "68e3cfdfedb049b059c08e47d5dc32c84ae06ddbb431fd204bd73b6752d826cc",
+    "is_glb_valid": true,
+    "header_hex": "676c544602000000a0f30b00a4430000"
+  }
+]

@@ -1,0 +1,16 @@
+/* Keep the additional language control usable on small screens. */
+#topbar .status-label,
+#topbar #btn-new-thread { white-space: nowrap; }
+#acb-language-switch { color-scheme: dark; }
+body[data-theme="light"] #acb-language-switch { color-scheme: light; }
+@media (max-width: 768px) {
+  #topbar { gap: 6px; }
+  #topbar .logo { font-size: 12px; white-space: nowrap; }
+  #topbar #status-label, #topbar #backend-icon { display: none !important; }
+  #topbar #mobile-menu-btn { margin-right: 0; }
+  #topbar #acb-language-switch { width: 88px; padding: 5px 4px !important; }
+  #topbar #btn-new-thread { flex-shrink: 0; padding: 6px 8px; }
+}
+@media (max-width: 420px) {
+  #topbar .logo { font-size: 0; gap: 0; }
+}

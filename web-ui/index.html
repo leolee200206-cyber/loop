@@ -5,13 +5,28 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AgentChatBus Console</title>
+  <script defer src="/static/js/shared-i18n.js?v=2"></script>
+  <link rel="stylesheet" href="/static/css/shared-i18n.css?v=1" />
+  <link rel="stylesheet" href="/static/css/shared-integrations.css?v=2" />
+  <script defer src="/static/js/shared-integrations.js?v=opencode-3"></script>
+  <link rel="stylesheet" href="/static/css/shared-3d-arena.css?v=20261109-ui-v2" />
   <link rel="icon" type="image/png" href="/static/bus.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/main.css?v=31" />
+  <link rel="stylesheet" href="/static/css/agent-avatar-system.css?v=20261109-ui-v2" />
+  <link rel="stylesheet" href="/static/css/main.css?v=20261109-ui-v2" />
+  <link rel="stylesheet" href="/static/css/task-receipts.css?v=20261109-platform-v2" />
   <link rel="stylesheet" href="/static/vendor/xterm/css/xterm.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/static/js/vendor/three/three.module.js",
+      "three/addons/": "/static/js/vendor/three/addons/"
+    }
+  }
+  </script>
 </head>
 
 <body>
@@ -127,8 +142,11 @@
         <!-- System prompt occupies full width -->
         <div id="sys-prompt-area"></div>
 
-        <!-- chat-body: chat column + agent panel side by side -->
-        <div id="chat-body">
+        <div id="workspace-stage">
+          <div id="acb-3d-arena" style="display:none"></div>
+
+          <!-- chat-body: chat column + agent panel side by side -->
+          <div id="chat-body">
           <div id="chat-main-column">
             <div id="chat-main-inner">
               <div id="messages-scroll">
@@ -150,6 +168,7 @@
           </div>
 
           <div id="cli-session-strip" hidden></div>
+        </div>
         </div>
 
       </div>
@@ -194,17 +213,18 @@
 
   <acb-thread-context-menu></acb-thread-context-menu>
   <acb-modal-shell></acb-modal-shell>
+  <acb-avatar-modal></acb-avatar-modal>
 
   <script src="/static/js/shared-api.js?v=2"></script>
   <script src="/static/js/shared-ui-agent.js?v=1"></script>
   <script src="/static/js/shared-theme.js?v=2"></script>
   <script src="/static/js/shared-utils.js?v=3"></script>
   <script src="/static/js/shared-message-renderer.js?v=5"></script>
-  <script src="/static/js/shared-sse.js?v=4"></script>
+  <script src="/static/js/shared-sse.js?v=20261109-platform-v2"></script>
   <script src="/static/vendor/xterm/lib/xterm.js"></script>
   <script src="/static/vendor/xterm-addon-fit/lib/addon-fit.js"></script>
   <script src="/static/js/shared-cli-sessions.js?v=18"></script>
-  <script src="/static/js/shared-modals.js?v=20"></script>
+  <script src="/static/js/shared-modals.js?v=22"></script>
   <script src="/static/js/components/acb-modal-shell.js?v=12"></script>
   <script src="/static/js/components/acb-empty-state.js?v=2"></script>
   <script src="/static/js/components/acb-icon-button.js?v=2"></script>
@@ -212,18 +232,18 @@
   <script src="/static/js/components/acb-filter-row.js?v=2"></script>
   <script src="/static/js/components/acb-thread-filter-shell.js?v=2"></script>
   <script src="/static/js/components/acb-thread-context-menu.js?v=3"></script>
-  <script src="/static/js/components/acb-thread-header.js?v=7"></script>
+  <script src="/static/js/components/acb-thread-header.js?v=20261109-ui-v2"></script>
   <script src="/static/js/components/acb-thread-item.js?v=4"></script>
   <script src="/static/js/components/acb-message-tail-meta.js?v=1"></script>
   <script src="/static/js/components/acb-admin-switch-card.js?v=4"></script>
-  <script src="/static/js/components/acb-compose-shell.js?v=3"></script>
+  <script src="/static/js/components/acb-compose-shell.js?v=20261109-ui-v2"></script>
   <script src="/static/js/components/acb-agent-status-shell.js?v=3"></script>
   <script src="/static/js/shared-split-view.js?v=1"></script>
   <script src="/static/js/shared-threads.js?v=9"></script>
   <script src="/static/js/shared-agent-status.js?v=2"></script>
   <script src="/static/js/components/acb-agent-status-item.js?v=2"></script>
   <script src="/static/js/shared-agents.js?v=4"></script>
-  <script src="/static/js/shared-chat.js?v=8"></script>
+  <script src="/static/js/shared-chat.js?v=20261109-platform-v2"></script>
   <script src="/static/js/shared-nav-sidebar.js?v=1"></script>
   <script src="/static/js/shared-tooltip.js?v=2"></script>
   <script src="/static/js/components/acb-confirm-dialog.js?v=2"></script>
@@ -238,6 +258,11 @@
     }
   </script>
   <script src="/static/js/shared-search.js?v=1"></script>
+  <script src="/static/js/vendor/gsap.min.js"></script>
+  <script src="/static/js/shared-animations.js?v=20261109-ui-v2"></script>
+  <script src="/static/js/shared-avatar-system.js?v=20261109-ui-v2"></script>
+  <script type="module" src="/static/js/components/acb-avatar-modal.js?v=20261109-ui-v2"></script>
+  <script src="/static/js/shared-3d-arena.js?v=20261109-ui-v2"></script>
   <script>
     // ==============================================================================================
     // State
@@ -449,6 +474,26 @@
     });
     window.addEventListener('hashchange', () => {
       void handleThreadHashChange();
+    });
+
+    window.addEventListener('acb-avatar-bindings-changed', () => {
+      document.querySelectorAll('#messages .msg-row[data-author-id]').forEach((row) => {
+        const authorId = row.getAttribute('data-author-id');
+        const isHumanRow = row.getAttribute('data-is-human') === '1';
+        if (isHumanRow || !authorId || authorId.toLowerCase() === 'system') return;
+        const avatarEl = row.querySelector('.msg-avatar');
+        if (avatarEl && window.AcbAvatarSystem) {
+          const resolved = window.AcbAvatarSystem.resolveAgentAvatar(authorId);
+          if (resolved) {
+            if (resolved.webp) {
+              avatarEl.innerHTML = `<img class="acb-avatar-img" src="${resolved.webp}" alt="${resolved.emoji}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><span class="acb-avatar-glyph" style="display:none;width:100%;height:100%;align-items:center;justify-content:center;">${resolved.emoji}</span>`;
+            } else {
+              avatarEl.innerHTML = `<span class="acb-avatar-glyph" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${resolved.emoji}</span>`;
+            }
+            avatarEl.setAttribute('data-emoji', resolved.emoji);
+          }
+        }
+      });
     });
 
     const comparePanelCloseBtn = document.getElementById('compare-panel-close');
@@ -1254,7 +1299,34 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
       });
     }
 
+    
+    let activeThreadGeneration = 0;
+
+    async function fetchFullThreadTranscript(threadId, expectedGen) {
+      let afterSeq = 0;
+      let allMessages = [];
+      const pageSize = 400;
+      while (true) {
+        if (expectedGen !== activeThreadGeneration || activeThreadId !== threadId) {
+          return null; // Abort stale fetch from older thread selection
+        }
+        const batch = (await api(`/api/threads/${threadId}/transcript?after_seq=${afterSeq}&limit=${pageSize}&include_system_prompt=1`)) || [];
+        if (!batch || !batch.length) break;
+        allMessages = allMessages.concat(batch);
+        const last = batch[batch.length - 1];
+        const lastSeq = typeof last?.seq === 'number' ? last.seq : Number(last?.seq);
+        if (Number.isFinite(lastSeq) && lastSeq > afterSeq) {
+          afterSeq = lastSeq;
+        } else {
+          break;
+        }
+        if (batch.length < pageSize) break;
+      }
+      return allMessages;
+    }
+
     async function selectThread(id, topic, status, initialSyncContext = null) {
+      const currentGen = ++activeThreadGeneration;
       // Close mobile sidebar when selecting thread
       closeMobileSidebar();
       if (window.AcbSplitView?.getCompareThreadId() === id) {
@@ -1274,6 +1346,7 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
       return window.AcbChat.selectThread({
         id, topic, status,
         initialSyncContext,
+        generation: currentGen,
         setThreadSyncContext: (threadId, syncContext) => {
           if (!threadId) return;
           if (syncContext && typeof syncContext.current_seq === 'number' && syncContext.reply_token) {
@@ -1298,6 +1371,57 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
         // UI-07: rebuild nav sidebar after thread messages loaded
         if (window.AcbNavSidebar) window.AcbNavSidebar.rebuild();
         if (window.AcbCliSessions) window.AcbCliSessions.refreshThread(id, api);
+        if (window.Acb3DArena) {
+          fetchFullThreadTranscript(id, currentGen).then((msgs) => {
+            if (currentGen !== activeThreadGeneration || activeThreadId !== id) return;
+            const participantsMap = new Map();
+            for (const [key, label] of activeThreadLabelsByKey.entries()) {
+              const kLower = String(key || '').toLowerCase();
+              const lLower = String(label || '').toLowerCase();
+              if (kLower === 'system' || lLower === 'system' || kLower === 'human' || lLower === 'human') continue;
+              participantsMap.set(key, label);
+            }
+            (msgs || []).forEach(m => {
+              if (!m) return;
+              const role = String(m.role || '').toLowerCase();
+              const author = String(m.author_name || m.author || '').toLowerCase();
+              const authorId = String(m.author_id || '').toLowerCase();
+              if (role === 'system' || author === 'system' || authorId === 'system' || m.is_system_prompt) return;
+              if (author === 'human' || authorId === 'human' || role === 'human') return;
+              const k = m.author_id || m.author;
+              const l = m.author_name || m.author;
+              if (k && !participantsMap.has(k)) {
+                participantsMap.set(k, l);
+              }
+            });
+
+            const participants = [];
+            for (const [key, label] of participantsMap.entries()) {
+              const kLower = String(key || '').toLowerCase();
+              const lLower = String(label || '').toLowerCase();
+              if (kLower === 'system' || lLower === 'system' || kLower === 'human' || lLower === 'human') continue;
+              const agentMeta = currentAgents?.find((a) => a.id === key || a.name === label);
+              let verifiedClientType = null;
+              if (agentMeta?.client_type === 'desktop' || agentMeta?.client_type === 'cli' || agentMeta?.client_type === 'external') {
+                verifiedClientType = agentMeta.client_type;
+              }
+              const isAgentOnline = Boolean(onlineAgentKeys.has(key) || agentMeta?.is_online === true || agentMeta?.online === true);
+              participants.push({
+                id: key,
+                name: label,
+                emoji: agentMeta?.emoji || (label.includes('Antigravity') ? '🌌' : label.includes('OpenCode') ? '⚡' : label.includes('Codex') ? '🛡️' : '🤖'),
+                color: authorColor(key || label),
+                client_type: verifiedClientType,
+                is_admin: Boolean(agentMeta?.is_admin || label.toLowerCase().includes('admin') || label.toLowerCase().includes('supervisor')),
+                online: isAgentOnline,
+              });
+            }
+            window.Acb3DArena.updateThread(id, participants, msgs || [], topic);
+          }).catch(() => {
+            if (currentGen !== activeThreadGeneration || activeThreadId !== id) return;
+            window.Acb3DArena.updateThread(id, [], [], topic);
+          });
+        }
       });
     }
     // Expose globally for AcbSearch navigation
@@ -2062,15 +2186,20 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
             wrapper.setAttribute('data-msg-id', messageId);
           }
 
+          const isMobileViewport = typeof window !== 'undefined' && window.innerWidth <= 600;
           const promptHeader = document.createElement('button');
           promptHeader.type = 'button';
           promptHeader.className = 'msg-sys-prompt-header';
-          promptHeader.setAttribute('aria-expanded', 'true');
-          promptHeader.classList.add('is-expanded');
-          promptHeader.innerHTML = `<span class="msg-sys-prompt-label">Thread Instructions (system)</span><span class="msg-sys-prompt-chevron">&#9650;</span>`;
+          promptHeader.setAttribute('aria-expanded', isMobileViewport ? 'false' : 'true');
+          if (!isMobileViewport) {
+            promptHeader.classList.add('is-expanded');
+          }
+          promptHeader.innerHTML = isMobileViewport
+            ? `<span class="msg-sys-prompt-label">讨论系统提示 (System) — 点击展开</span><span class="msg-sys-prompt-chevron">&#9660;</span>`
+            : `<span class="msg-sys-prompt-label">讨论系统提示 (System)</span><span class="msg-sys-prompt-chevron">&#9650;</span>`;
 
           const promptBody = document.createElement('div');
-          promptBody.className = 'msg-sys-prompt-body bubble-v2';
+          promptBody.className = 'msg-sys-prompt-body bubble-v2' + (isMobileViewport ? ' collapsed' : '');
           renderMessageContent(promptBody, m.content, null);
 
           promptHeader.addEventListener('click', () => {
@@ -2080,8 +2209,8 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
             promptBody.classList.toggle('collapsed', expanded);
             promptHeader.querySelector('.msg-sys-prompt-chevron').innerHTML = !expanded ? '&#9650;' : '&#9660;';
             promptHeader.querySelector('.msg-sys-prompt-label').textContent = !expanded
-              ? 'Thread Instructions (system)'
-              : 'Thread Instructions (system) u{2014} click to expand';
+              ? '讨论系统提示 (System)'
+              : '讨论系统提示 (System) u{2014} click to expand';
           });
 
           wrapper.appendChild(promptHeader);
@@ -2153,15 +2282,29 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
       );
       const authorKey = isHuman ? 'human' : (isSystem ? 'system' : String(m.author_id ?? authorLabel));
       const color = authorColor(authorKey);
-      const avatarEmoji = String(m.author_emoji || '').trim()
+      let avatarEmoji = String(m.author_emoji || '').trim()
         || String(currentAgents?.find((a) => a.id === String(m.author_id ?? ''))?.emoji || '').trim()
         || (isHuman ? '👤' : (isSystem ? '⚙️' : '🤖'));
+      let avatarWebp = null;
+
+      if (window.AcbAvatarSystem && !isHuman && !isSystem) {
+        const resolved = window.AcbAvatarSystem.resolveAgentAvatar(m.author_id || authorLabel, authorLabel);
+        if (resolved) {
+          if (resolved.emoji) avatarEmoji = resolved.emoji;
+          if (resolved.webp) avatarWebp = resolved.webp;
+        }
+      }
       
       const analysis = window.AcbUtils.getEmojiAnalysis(avatarEmoji);
       const isDarkTheme = document.body.getAttribute('data-theme') !== 'light';
       const styles = window.AcbUtils.getEmojiStyledBackground(avatarEmoji, isDarkTheme);
       const avatarBg = styles.bg;
       const avatarBorder = styles.border;
+
+      const matchedAgent = currentAgents?.find((a) => a.id === String(m.author_id ?? '') || a.agent_id === String(m.author_id ?? ''));
+      const isWebAgent = Boolean(matchedAgent?.capabilities?.includes('browser-ui') || matchedAgent?.capabilities?.includes('web-session-presence') || matchedAgent?.model === 'Web session' || matchedAgent?.last_activity?.startsWith('browser_'));
+      const agentStateAttr = isHuman ? 'online' : (matchedAgent ? (matchedAgent.is_online ? 'online' : 'offline') : '');
+      const sessionTypeAttr = isWebAgent ? 'browser' : '';
 
       const isAgentMessage = !isHuman && !isSystem;
       const sentAtLabel = fmtTime(m.created_at);
@@ -2182,6 +2325,7 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
         row.setAttribute('data-seq', String(m.seq));
       }
       row.setAttribute('data-msg-id', messageId);
+      row.id = `msg-${messageId}`;
       row.setAttribute('data-is-human', isHuman ? '1' : '0');
 
       // Check if this message has mentions (look in metadata if string/object)
@@ -2222,7 +2366,12 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
         : '';
 
       row.innerHTML = `
-      <div class="msg-avatar" data-emoji="${avatarEmoji}" style="background:${avatarBg};border:1px solid ${avatarBorder}">${avatarEmoji}</div>
+      ${(() => {
+        const avatarContentHtml = avatarWebp
+          ? `<img class="acb-avatar-img" src="${avatarWebp}" alt="${avatarEmoji}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><span class="acb-avatar-glyph" style="display:none;width:100%;height:100%;align-items:center;justify-content:center;">${avatarEmoji}</span>`
+          : `<span class="acb-avatar-glyph" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${avatarEmoji}</span>`;
+        return `<div class="msg-avatar" data-author-id="${esc(m.author_id || authorLabel)}" data-emoji="${avatarEmoji}" data-state="${agentStateAttr}" data-session-type="${sessionTypeAttr}" style="background:${avatarBg};border:1px solid ${avatarBorder}">${avatarContentHtml}</div>`;
+      })()}
       <div class="msg-col">
         <div class="msg-header">
           <span class="msg-author-label" style="color:${color}">${esc(authorLabel)}</span>
@@ -2330,6 +2479,12 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
         window.AcbChat.refreshHumanDeliveryIndicators(window.currentThreadId || null);
       }
       if (!readOnly && window.AcbNavSidebar) window.AcbNavSidebar.onNewMessage();
+      if (!readOnly && window.Acb3DArena) {
+        window.Acb3DArena.onNewMessage(m);
+      }
+      if (!readOnly && window.AcbAnimations) {
+        window.AcbAnimations.animateMessage(row);
+      }
 
       // UI-07: collapse system prompt on first real message (primary only)
       if (!readOnly && targetKey === (window.AcbSplitView?.TARGET_PRIMARY || 'primary')) {
@@ -2344,7 +2499,7 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
             const chevron = header.querySelector('.msg-sys-prompt-chevron');
             const label = header.querySelector('.msg-sys-prompt-label');
             if (chevron) chevron.innerHTML = '&#9660;';
-            if (label) label.textContent = 'Thread Instructions (system) — click to expand';
+            if (label) label.textContent = '讨论系统提示 (System) — 点击展开';
           }
         }
       }
@@ -2467,6 +2622,9 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
         escapeHtml,
         bindAgentTooltipEvents,
       });
+      if (window.Acb3DArena && typeof window.Acb3DArena.updateAgentsPresence === 'function') {
+        window.Acb3DArena.updateAgentsPresence(currentAgents, onlineAgentKeys);
+      }
     }
 
     // ==============================================================================================
@@ -2780,6 +2938,13 @@ Note: Thread name is the topic label. Thread ID is the unique identifier.`;
         modal.appendChild(container);
       }
     };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        if (window.Acb3DArena) window.Acb3DArena.init();
+      }, { once: true });
+    } else {
+      if (window.Acb3DArena) window.Acb3DArena.init();
+    }
   </script>
 </body>
 

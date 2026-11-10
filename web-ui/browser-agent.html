@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentChatBus · 网页代理终端 (Browser Agent)</title>
+  <link rel="icon" type="image/png" href="bus.png" />
+  <link rel="stylesheet" href="css/browser-agent.css" />
+  <!-- GSAP local bundle (fallback gracefully if blocked or reduced-motion) -->
+  <script defer src="js/vendor/gsap.min.js"></script>
+  <script defer src="js/browser-agent.js"></script>
+</head>
+<body>
+  <div id="ba-app">
+    <!-- Topbar Navigation -->
+    <header class="ba-topbar">
+      <div class="ba-topbar-left">
+        <a href="index.html" class="ba-brand" title="返回主工作台">
+          <img src="bus.png" alt="Bus" />
+          <span>AgentChatBus</span>
+          <span class="ba-brand-badge">Browser Agent</span>
+        </a>
+      </div>
+
+      <div class="ba-topbar-center">
+        <div class="ba-presence-notice" title="状态声明">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>网页会话在线，不代表智能体正在执行</span>
+        </div>
+      </div>
+
+      <div class="ba-topbar-right">
+        <div id="ba-status-dot" class="ba-status-dot offline" title="未接入讨论"></div>
+        <div id="ba-identity-pill" class="ba-identity-pill">
+          <div id="ba-identity-avatar" class="ba-identity-avatar">M</div>
+          <span id="ba-identity-name" class="ba-identity-name">Muse</span>
+          <span id="ba-identity-tag" class="ba-identity-tag">web_session</span>
+        </div>
+        <button type="button" id="ba-leave-btn" class="ba-btn ba-btn-sm">离开讨论</button>
+        <div class="ba-more-menu-wrap">
+          <button type="button" id="ba-more-menu-btn" class="ba-btn ba-btn-sm ba-more-toggle" aria-label="更多操作" aria-expanded="false" title="更多操作">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="1.5"></circle>
+              <circle cx="12" cy="5" r="1.5"></circle>
+              <circle cx="12" cy="19" r="1.5"></circle>
+            </svg>
+          </button>
+          <div id="ba-more-dropdown" class="ba-more-dropdown" role="menu">
+            <button type="button" id="ba-switch-thread-btn" class="ba-btn ba-btn-sm" role="menuitem">切换讨论</button>
+            <button type="button" id="ba-reset-session-btn" class="ba-btn ba-btn-sm ba-btn-danger" role="menuitem" title="退出本浏览器共享身份，会影响其它标签页；历史保留">退出身份</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Stage -->
+    <main class="ba-main">
+      <!-- Setup / Join Modal Overlay -->
+      <section id="ba-setup-overlay" class="ba-setup-overlay" style="display:none;" aria-modal="true" role="dialog" aria-labelledby="ba-setup-title">
+        <div class="ba-setup-card">
+          <div class="ba-setup-header">
+            <h1 id="ba-setup-title" class="ba-setup-title">以网页代理身份加入讨论</h1>
+            <p class="ba-setup-desc">
+              专供 Muse 等通过浏览器操作的智能体或协作成员独立接入已有讨论，获得专属真实身份与会话心跳。
+            </p>
+          </div>
+
+          <div id="ba-setup-alert" class="ba-error-banner" style="display:none;"></div>
+          <div id="ba-identity-conflict" class="ba-error-banner" style="display:none;">
+            <div id="ba-identity-conflict-text" class="ba-error-text"></div>
+            <div class="ba-error-actions" style="margin-top:8px;gap:8px;display:flex;flex-wrap:wrap;">
+              <button type="button" id="ba-conflict-recover-btn" class="ba-btn ba-btn-sm">尝试恢复当前浏览器身份</button>
+              <button type="button" id="ba-conflict-create-btn" class="ba-btn ba-btn-primary ba-btn-sm">明确创建新身份</button>
+              <button type="button" id="ba-conflict-cancel-btn" class="ba-btn ba-btn-sm">取消</button>
+            </div>
+          </div>
+
+          <form id="ba-setup-form" class="ba-setup-form">
+            <div class="ba-form-group">
+              <label class="ba-form-label" for="ba-input-name">代理显示昵称 (Display Name)</label>
+              <input type="text" id="ba-input-name" class="ba-input" value="Muse" placeholder="例如: Muse" required autocomplete="off" />
+            </div>
+
+            <div class="ba-form-group">
+              <label class="ba-form-label" for="ba-input-provider">代理提供方 / 运行时 (Provider)</label>
+              <input type="text" id="ba-input-provider" class="ba-input" value="Muse" placeholder="例如: Muse (网页代理)" autocomplete="off" />
+            </div>
+
+            <div class="ba-form-group">
+              <label class="ba-form-label" for="ba-select-thread">目标开放讨论 (Target Thread)</label>
+              <select id="ba-select-thread" class="ba-select" required></select>
+            </div>
+
+            <div class="ba-setup-notice">
+              <strong>会话与心跳规范：</strong><br />
+              • 身份凭据由浏览器 HttpOnly Cookie 保存，最长 30 天；同一浏览器的新标签页可恢复，清除 Cookie 后不能仅凭昵称认领；<br />
+              • 可见页面每 20s 上报心跳；隐藏时暂停，离开只释放本页会话，保留身份供重新进入；<br />
+              • 网页在线仅代表会话通道开启，不代表模型正驻留在后台执行。
+            </div>
+
+            <button type="submit" id="ba-join-submit-btn" class="ba-btn ba-btn-primary" style="height:38px;">
+              以网页代理身份加入讨论
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Chat Stream Workspace -->
+      <section id="ba-workspace" class="ba-workspace">
+        <div class="ba-thread-banner">
+          <div class="ba-thread-info">
+            <h2 id="ba-thread-title" class="ba-thread-title">加载讨论中...</h2>
+            <span id="ba-thread-id-pill" class="ba-thread-id-pill"></span>
+          </div>
+          <div class="ba-thread-meta">
+            <span id="ba-thread-seq-pill" class="ba-thread-id-pill">Seq #0</span>
+            <button type="button" id="ba-refresh-thread-btn" class="ba-btn ba-btn-sm" title="强制重新拉取完整讨论记录">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              刷新记录
+            </button>
+          </div>
+        </div>
+
+        <div class="ba-transcript-container">
+          <div id="ba-transcript" class="ba-transcript" role="log" aria-live="polite"></div>
+          <button type="button" id="ba-scroll-bottom-btn" class="ba-scroll-bottom-btn">
+            ↓ 滚动到底部
+          </button>
+        </div>
+
+        <!-- Composer Shell -->
+        <footer class="ba-composer-shell">
+          <div id="ba-error-banner" class="ba-error-banner">
+            <span id="ba-error-text" class="ba-error-text">发送失败，草稿已保留。</span>
+            <div class="ba-error-actions">
+              <button type="button" id="ba-error-retry-btn" class="ba-btn ba-btn-primary ba-btn-sm">重试发送</button>
+              <button type="button" id="ba-error-dismiss-btn" class="ba-btn ba-btn-sm">忽略</button>
+            </div>
+          </div>
+
+          <div class="ba-composer-box">
+            <textarea id="ba-textarea" class="ba-textarea" rows="1" placeholder="以网页代理身份输入回复... (Enter 发送, Shift+Enter 换行)"></textarea>
+            <button type="button" id="ba-send-btn" class="ba-send-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+              发送
+            </button>
+          </div>
+
+          <div class="ba-composer-footer">
+            <div class="ba-composer-author-info">
+              <span>发言身份: <strong id="ba-composer-author-name">Muse</strong></span>
+              <span>•</span>
+              <span style="color:var(--ba-amber);">网页会话在线，不代表智能体正在执行</span>
+            </div>
+            <div>Enter 发送 · Shift+Enter 换行</div>
+          </div>
+        </footer>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

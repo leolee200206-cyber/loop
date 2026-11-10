@@ -341,6 +341,10 @@ export class MemoryStore {
   }>();
   private readonly messageEditHistory = new Map<string, Array<{ version: number; old_content: string; edited_by: string; created_at: string }>>();
   private readonly waitLifecycle = new Map<string, WaitLifecycleSnapshot>();
+  // Browser identity v2: ephemeral per-tab/session leases. A shared browser
+  // identity stays online while any lease is fresh; hidden tabs must not
+  // force other visible tabs offline.
+  private readonly browserIdentityLeases = new Map<string, Map<string, number>>();
   private ideOwnerInstanceId: string | null = null;
   // Per-thread AsyncEvent registry for event-driven msg_wait wake-ups (matching Python _thread_events)
   // When msg_post succeeds, the corresponding event is set so that all waiters wake up immediately.
@@ -597,7 +601,7 @@ export class MemoryStore {
     let agentsOnline = 0;
     try {
       const row = this.persistenceDb.prepare(
-        "SELECT COUNT(*) as count FROM agents WHERE last_heartbeat >= ?"
+        "SELECT COUNT(*) as count FROM agents WHERE last_heartbeat >= ? AND (last_activity IS NULL OR last_activity != 'browser_leave')"
       ).get(heartbeatCutoff) as { count: number };
       agentsOnline = row.count;
     } catch {}
@@ -695,6 +699,7 @@ export class MemoryStore {
       DELETE FROM msg_wait_refresh_requests;
       DELETE FROM thread_wait_states;
       DELETE FROM templates;
+      DELETE FROM task_receipts;
       DELETE FROM state_snapshots;
     `);
     this.persistState();
@@ -1495,6 +1500,7 @@ export class MemoryStore {
       this.persistenceDb.prepare("DELETE FROM thread_tags WHERE thread_id = ?").run(threadId);
       this.persistenceDb.prepare("DELETE FROM messages WHERE thread_id = ?").run(threadId);
       this.persistenceDb.prepare("DELETE FROM human_only_messages WHERE thread_id = ?").run(threadId);
+      this.persistenceDb.prepare("DELETE FROM task_receipts WHERE thread_id = ?").run(threadId);
       this.persistenceDb.prepare("DELETE FROM reply_tokens WHERE thread_id = ?").run(threadId);
       this.persistenceDb.prepare("DELETE FROM msg_wait_refresh_requests WHERE thread_id = ?").run(threadId);
       this.persistenceDb.prepare("DELETE FROM thread_settings WHERE thread_id = ?").run(threadId);
@@ -2773,23 +2779,29 @@ export class MemoryStore {
     return agent;
   }
 
-  listAgents(): AgentRecord[] {
+  listAgents(options?: { includeRetiredBrowserAliases?: boolean }): AgentRecord[] {
     const rows = this.persistenceDb.prepare(
       `
         SELECT id, name, display_name, alias_source, ide, model, description, is_online, last_heartbeat,
-               last_activity, last_activity_time, capabilities, skills, emoji
+               last_activity, last_activity_time, capabilities, skills, emoji,
+               browser_identity_canonical_id, browser_identity_retired_at, browser_identity_retired_reason
         FROM agents
       `
     ).all() as Array<Record<string, unknown>>;
     // Token should NOT be exposed in agent list for security (Python parity)
-    return this.normalizeAgentRecords(rows.map((row) => this.rowToAgentRecord(row)), { persist: true });
+    let records = this.normalizeAgentRecords(rows.map((row) => this.rowToAgentRecord(row)), { persist: true });
+    if (!options?.includeRetiredBrowserAliases) {
+      records = records.filter((a) => !a.browser_identity_canonical_id);
+    }
+    return records;
   }
 
   getAgent(agentId: string): AgentRecord | undefined {
     const row = this.persistenceDb.prepare(
       `
         SELECT id, name, display_name, alias_source, ide, model, description, is_online, last_heartbeat,
-               last_activity, last_activity_time, capabilities, skills, token, emoji
+               last_activity, last_activity_time, capabilities, skills, token, emoji,
+               browser_identity_canonical_id, browser_identity_retired_at, browser_identity_retired_reason
         FROM agents WHERE id = ?
       `
     ).get(agentId) as Record<string, unknown> | undefined;
@@ -2971,6 +2983,129 @@ export class MemoryStore {
     return true;
   }
 
+  // ---- Browser identity v2 (minimal necessary binding/projection) ----
+
+  private static readonly BROWSER_LEASE_TTL_MS = 90_000;
+
+  private pruneBrowserLeases(agentId: string, now = Date.now()): Map<string, number> {
+    const leases = this.browserIdentityLeases.get(agentId);
+    if (!leases) return new Map();
+    for (const [id, ts] of leases.entries()) {
+      if (now - ts > MemoryStore.BROWSER_LEASE_TTL_MS) leases.delete(id);
+    }
+    if (leases.size === 0) this.browserIdentityLeases.delete(agentId);
+    return leases;
+  }
+
+  setBrowserLease(agentId: string, leaseId: string): boolean {
+    const agent = this.getAgent(agentId);
+    if (!agent) return false;
+    const leases = this.pruneBrowserLeases(agentId);
+    leases.set(String(leaseId || "default"), Date.now());
+    this.browserIdentityLeases.set(agentId, leases);
+    return this.setAgentOnlineState(agentId, true, "browser_heartbeat");
+  }
+
+  clearBrowserLease(agentId: string, leaseId: string): { hasFreshLease: boolean } {
+    const leases = this.pruneBrowserLeases(agentId);
+    leases.delete(String(leaseId || "default"));
+    if (leases.size === 0) this.browserIdentityLeases.delete(agentId);
+    return { hasFreshLease: leases.size > 0 };
+  }
+
+  clearAllBrowserLeases(agentId: string): void {
+    this.browserIdentityLeases.delete(agentId);
+  }
+
+  hasFreshBrowserLeases(agentId: string): boolean {
+    return this.pruneBrowserLeases(agentId).size > 0;
+  }
+
+  isBrowserIdentityRetired(agent: Pick<AgentRecord, "browser_identity_canonical_id"> | undefined | null): boolean {
+    return !!(agent && agent.browser_identity_canonical_id);
+  }
+
+  resolveCanonicalBrowserAgent(agent: AgentRecord | undefined): AgentRecord | undefined {
+    if (!agent) return undefined;
+    if (!agent.browser_identity_canonical_id) return agent;
+    const canonical = this.getAgent(agent.browser_identity_canonical_id);
+    return canonical || agent;
+  }
+
+  findBrowserIdentitiesByDisplayName(displayName: string): AgentRecord[] {
+    const needle = String(displayName || "").trim().toLowerCase();
+    if (!needle) return [];
+    return this.listAgents({ includeRetiredBrowserAliases: true }).filter((a) => {
+      const caps = Array.isArray(a.capabilities) ? a.capabilities : [];
+      if (!caps.includes("browser-ui")) return false;
+      const name = String(a.display_name || a.name || "").trim().toLowerCase();
+      return name === needle;
+    });
+  }
+
+  getAgentForBrowserCredential(agentId: string, token: string): { agent: AgentRecord; canonical: AgentRecord; migratedFromRetired: boolean } | undefined {
+    const agent = this.getAgent(agentId);
+    if (!agent || !agent.token || !safeCompare(agent.token, token)) return undefined;
+    const canonical = this.resolveCanonicalBrowserAgent(agent) || agent;
+    return { agent, canonical, migratedFromRetired: canonical.id !== agent.id };
+  }
+
+  aliasBrowserIdentityAsDuplicate(input: { canonicalId: string; retiredId: string; reason: string; actor?: string }): { canonical: AgentRecord; retired: AgentRecord } {
+    const canonicalId = String(input.canonicalId || "").trim();
+    const retiredId = String(input.retiredId || "").trim();
+    if (!canonicalId || !retiredId) throw new Error("canonicalId and retiredId required");
+    if (canonicalId === retiredId) throw new Error("canonicalId and retiredId must differ");
+    const canonical = this.getAgent(canonicalId);
+    const retired = this.getAgent(retiredId);
+    if (!canonical) throw new Error("canonical agent not found");
+    if (!retired) throw new Error("retired agent not found");
+    const cCaps = Array.isArray(canonical.capabilities) ? canonical.capabilities : [];
+    const rCaps = Array.isArray(retired.capabilities) ? retired.capabilities : [];
+    if (!cCaps.includes("browser-ui") || !rCaps.includes("browser-ui")) {
+      throw new Error("browser identity alias requires browser-ui agents (explicit two IDs only)");
+    }
+    if (canonical.browser_identity_canonical_id) throw new Error("canonical agent is already retired");
+    // Prevent alias chains/rings: the agent being retired must not itself be a
+    // canonical target for other retired aliases.
+    const hasDependents = this.listAgents({ includeRetiredBrowserAliases: true }).some(
+      (a) => a.id !== retiredId && a.browser_identity_canonical_id === retiredId,
+    );
+    if (hasDependents) throw new Error("alias chain prohibited: retired agent is already a canonical target for other aliases");
+    if (retired.browser_identity_canonical_id && retired.browser_identity_canonical_id !== canonicalId) {
+      throw new Error("retired agent already aliased to a different canonical agent");
+    }
+    const now = new Date().toISOString();
+    retired.browser_identity_canonical_id = canonicalId;
+    retired.browser_identity_retired_at = retired.browser_identity_retired_at || now;
+    retired.browser_identity_retired_reason = String(input.reason || "duplicate_browser_identity");
+    retired.is_online = false;
+    retired.last_activity = "browser_identity_retired";
+    retired.last_activity_time = now;
+    this.clearAllBrowserLeases(retiredId);
+    this.clearAllBrowserLeases(canonicalId);
+    this.upsertAgent(retired);
+    this.upsertAgent(canonical);
+    eventBus.emit({ type: "agent.updated", payload: retired });
+    eventBus.emit({ type: "agent.updated", payload: canonical });
+    this.persistState();
+    return { canonical: this.getAgent(canonicalId)!, retired: this.getAgent(retiredId)! };
+  }
+
+  revokeBrowserIdentityAlias(input: { retiredId: string; reason?: string; actor?: string }): AgentRecord {
+    const retired = this.getAgent(String(input.retiredId || "").trim());
+    if (!retired) throw new Error("agent not found");
+    if (!retired.browser_identity_canonical_id) return retired;
+    retired.browser_identity_canonical_id = undefined;
+    retired.browser_identity_retired_at = undefined;
+    retired.browser_identity_retired_reason = undefined;
+    retired.last_activity = "browser_identity_alias_revoked";
+    retired.last_activity_time = new Date().toISOString();
+    this.upsertAgent(retired);
+    eventBus.emit({ type: "agent.updated", payload: retired });
+    this.persistState();
+    return this.getAgent(retired.id)!;
+  }
+
   verifyAgentToken(agentId: string, token: string): boolean {
     const agent = this.getAgent(agentId);
     return agent !== undefined && agent.token !== undefined && safeCompare(agent.token, token);
@@ -3027,11 +3162,21 @@ export class MemoryStore {
       `
         SELECT id, name, display_name, alias_source, ide, model, description,
                is_online, last_heartbeat, last_activity, last_activity_time,
-               capabilities, skills, token, emoji
+               capabilities, skills, token, emoji,
+               browser_identity_canonical_id, browser_identity_retired_at, browser_identity_retired_reason
         FROM agents WHERE id IN (${placeholders})
       `
     ).all(...Array.from(participantIds)) as Array<Record<string, unknown>>;
-    return this.normalizeAgentRecords(rows.map((row) => this.rowToAgentRecord(row)), { persist: true });
+    const records = this.normalizeAgentRecords(rows.map((row) => this.rowToAgentRecord(row)), { persist: true });
+    const byCanonical = new Map<string, AgentRecord>();
+    for (const agent of records) {
+      const canonicalId = agent.browser_identity_canonical_id || agent.id;
+      if (!byCanonical.has(canonicalId)) {
+        byCanonical.set(canonicalId, agent.browser_identity_canonical_id ? (this.resolveCanonicalBrowserAgent(agent) || agent) : agent);
+      }
+    }
+    // If canonical wasn't in participant set, resolveCanonicalBrowserAgent fetched it; keep single seat.
+    return Array.from(byCanonical.values());
   }
 
   getThreadWaitingAgents(threadId: string): Array<{ id: string; display_name?: string; emoji?: string }> {
@@ -4074,6 +4219,9 @@ export class MemoryStore {
   }
 
   private computeAgentOnline(row: Record<string, unknown>): boolean {
+    // Leaving a browser session is explicit; its recent heartbeat must not
+    // immediately turn it online again when the record is read.
+    if (row.last_activity === "browser_leave") return false;
     const now = Date.now();
     const heartbeatTs = this.parseAgentTime(row.last_heartbeat);
     const activityTs = this.parseAgentTime(row.last_activity_time);
@@ -4107,7 +4255,10 @@ export class MemoryStore {
         : undefined,
       // Token is optional - not exposed in listAgents for security (Python parity)
       token: row.token ? String(row.token) : undefined,
-      emoji: row.emoji ? String(row.emoji) : undefined
+      emoji: row.emoji ? String(row.emoji) : undefined,
+      browser_identity_canonical_id: row.browser_identity_canonical_id ? String(row.browser_identity_canonical_id) : undefined,
+      browser_identity_retired_at: row.browser_identity_retired_at ? String(row.browser_identity_retired_at) : undefined,
+      browser_identity_retired_reason: row.browser_identity_retired_reason ? String(row.browser_identity_retired_reason) : undefined,
     };
   }
 
@@ -4362,7 +4513,8 @@ export class MemoryStore {
     const agents = this.persistenceDb.prepare(
       `
         SELECT id, name, display_name, alias_source, ide, model, description, is_online, last_heartbeat,
-               last_activity, last_activity_time, capabilities, skills, token, emoji
+               last_activity, last_activity_time, capabilities, skills, token, emoji,
+               browser_identity_canonical_id, browser_identity_retired_at, browser_identity_retired_reason
         FROM agents
       `
     ).all() as Array<Record<string, unknown>>;
@@ -4582,7 +4734,10 @@ export class MemoryStore {
         capabilities TEXT,
         skills TEXT,
         token TEXT NOT NULL,
-        emoji TEXT
+        emoji TEXT,
+        browser_identity_canonical_id TEXT,
+        browser_identity_retired_at TEXT,
+        browser_identity_retired_reason TEXT
       );
       CREATE TABLE IF NOT EXISTS reply_tokens (
         token TEXT PRIMARY KEY,
@@ -4657,6 +4812,18 @@ export class MemoryStore {
         is_builtin INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS task_receipts (
+        thread_id TEXT NOT NULL,
+        message_id TEXT NOT NULL,
+        message_seq INTEGER NOT NULL,
+        target_agent_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 0,
+        detail TEXT,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (thread_id, message_id, target_agent_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_task_receipts_thread_seq ON task_receipts(thread_id, message_seq);
     `);
 
     // Proactive Migration: Handle existing databases lacking new columns
@@ -4682,6 +4849,9 @@ export class MemoryStore {
       addColumnIfMissing("agents", "capabilities", "TEXT");
       addColumnIfMissing("agents", "skills", "TEXT");
       addColumnIfMissing("agents", "emoji", "TEXT");
+      addColumnIfMissing("agents", "browser_identity_canonical_id", "TEXT");
+      addColumnIfMissing("agents", "browser_identity_retired_at", "TEXT");
+      addColumnIfMissing("agents", "browser_identity_retired_reason", "TEXT");
 
       // Migration: messages table
       addColumnIfMissing("messages", "metadata", "TEXT");
@@ -4837,13 +5007,14 @@ export class MemoryStore {
   private upsertAgent(agent: AgentRecord): void {
     // Update in-memory map FIRST (critical for getWaitingAgentsForThread to see changes)
     this.agents.set(agent.id, agent);
-    
+
     this.persistenceDb.prepare(
       `
         INSERT INTO agents (
           id, name, display_name, alias_source, ide, model, description, is_online, last_heartbeat,
-          last_activity, last_activity_time, capabilities, skills, token, emoji
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          last_activity, last_activity_time, capabilities, skills, token, emoji,
+          browser_identity_canonical_id, browser_identity_retired_at, browser_identity_retired_reason
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
           display_name = excluded.display_name,
@@ -4858,7 +5029,10 @@ export class MemoryStore {
           capabilities = excluded.capabilities,
           skills = excluded.skills,
           token = excluded.token,
-          emoji = excluded.emoji
+          emoji = excluded.emoji,
+          browser_identity_canonical_id = excluded.browser_identity_canonical_id,
+          browser_identity_retired_at = excluded.browser_identity_retired_at,
+          browser_identity_retired_reason = excluded.browser_identity_retired_reason
       `
     ).run(
       agent.id,
@@ -4873,11 +5047,12 @@ export class MemoryStore {
       agent.last_activity || null,
       agent.last_activity_time || null,
       JSON.stringify(agent.capabilities || []),
-      // 移植自：Python test_agent_capabilities.py L90
-      // skills 为 undefined 时存储 null，不是 '[]'
       agent.skills ? JSON.stringify(agent.skills) : null,
       agent.token || null,
-      agent.emoji || null
+      agent.emoji || null,
+      agent.browser_identity_canonical_id || null,
+      agent.browser_identity_retired_at || null,
+      agent.browser_identity_retired_reason || null
     );
   }
 
@@ -5081,6 +5256,189 @@ export class MemoryStore {
       .filter(t => t.threadId === threadId && t.agentId === agentId && t.status === "issued")
       .sort((a, b) => b.issuedAt - a.issuedAt);
     return tokens.length > 0 ? tokens[0] : undefined;
+  }
+
+  // ---- Task receipts (directed message ack; no auto-wake, no token leakage) ----
+  private isTaskReceiptUuid(value: unknown): value is string {
+    return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  private taskReceiptConnectionType(agent: AgentRecord | undefined): "browser" | "mcp" | "unknown" {
+    const caps = Array.isArray(agent?.capabilities) ? agent!.capabilities!.map((c) => String(c).toLowerCase()) : [];
+    if (caps.includes("browser-ui")) return "browser";
+    if (caps.includes("mcp")) return "mcp";
+    return "unknown";
+  }
+
+  private deriveTaskReceiptTargets(message: MessageRecord): string[] {
+    const mentions = (message.metadata as any)?.mentions;
+    if (!Array.isArray(mentions)) return [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const m of mentions) {
+      if (!this.isTaskReceiptUuid(m)) continue;
+      const id = String(m);
+      if (seen.has(id)) continue;
+      // Only generate executable receipts for registered, valid agent targets.
+      if (!this.getAgent(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out;
+  }
+
+  private taskReceiptRowKey(threadId: string, messageId: string, targetAgentId: string) {
+    return `${threadId}\u0000${messageId}\u0000${targetAgentId}`;
+  }
+
+  listTaskReceipts(input: { threadId: string; afterSeq?: number; limit?: number }): {
+    receipts: Array<{
+      message_id: string;
+      message_seq: number;
+      target_agent_id: string;
+      status: string;
+      delivery_mode: "manual_pull";
+      can_auto_wake: false;
+      connection_type: "browser" | "mcp" | "unknown";
+      updated_at: string;
+      version: number;
+    }>;
+    has_more: boolean;
+    next_seq: number;
+  } {
+    const threadId = input.threadId;
+    const afterSeq = Math.max(0, Number(input.afterSeq || 0));
+    const limitMsgs = Math.min(200, Math.max(1, Number(input.limit || 200)));
+    // Page by message seq with SQL LIMIT to avoid full-history scan.
+    const rows = this.persistenceDb.prepare(
+      `
+        SELECT id, thread_id, seq, priority, author, author_id, author_name, author_emoji,
+               role, content, metadata, reply_to_msg_id, created_at, edited_at, edit_version
+        FROM messages
+        WHERE thread_id = ? AND seq > ?
+        ORDER BY seq ASC
+        LIMIT ?
+      `
+    ).all(threadId, afterSeq, limitMsgs + 1) as Array<Record<string, unknown>>;
+    const hasMoreMsgs = rows.length > limitMsgs;
+    const pageRows = hasMoreMsgs ? rows.slice(0, limitMsgs) : rows;
+    const messages = pageRows.map((r) => this.rowToMessageRecord(r));
+
+    // Load persisted receipt state for messages in this page.
+    const persisted = new Map<string, { status: string; version: number; detail: string | null; updated_at: string }>();
+    if (messages.length) {
+      const ids = messages.map((m) => m.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const rrows = this.persistenceDb.prepare(
+        `SELECT message_id, target_agent_id, status, version, detail, updated_at FROM task_receipts WHERE thread_id = ? AND message_id IN (${placeholders})`
+      ).all(threadId, ...ids) as Array<Record<string, unknown>>;
+      for (const rr of rrows) {
+        persisted.set(this.taskReceiptRowKey(threadId, String(rr.message_id), String(rr.target_agent_id)), {
+          status: String(rr.status),
+          version: Number(rr.version || 0),
+          detail: rr.detail == null ? null : String(rr.detail),
+          updated_at: String(rr.updated_at),
+        });
+      }
+    }
+
+    const receipts: Array<any> = [];
+    let lastSeq = afterSeq;
+    for (const msg of messages) {
+      lastSeq = Math.max(lastSeq, msg.seq);
+      const targets = this.deriveTaskReceiptTargets(msg);
+      for (const targetId of targets) {
+        const p = persisted.get(this.taskReceiptRowKey(threadId, msg.id, targetId));
+        const agent = this.getAgent(targetId);
+        receipts.push({
+          message_id: msg.id,
+          message_seq: msg.seq,
+          target_agent_id: targetId,
+          status: p?.status || "awaiting_ack",
+          delivery_mode: "manual_pull" as const,
+          can_auto_wake: false as const,
+          connection_type: this.taskReceiptConnectionType(agent),
+          updated_at: p?.updated_at || msg.created_at,
+          version: p ? p.version : 0,
+        });
+      }
+    }
+    const nextSeq = hasMoreMsgs ? lastSeq : lastSeq;
+    return { receipts, has_more: hasMoreMsgs, next_seq: nextSeq };
+  }
+
+  acknowledgeTaskReceipt(input: {
+    threadId: string;
+    messageId: string;
+    targetAgentId: string;
+    status: string;
+    expectedVersion: number;
+    detail?: string;
+  }): { ok: true; receipt: any } | { ok: false; code: number; error: string; detail?: string; receipt?: any } {
+    const allowed = new Set(["acknowledged", "running", "completed", "failed"]);
+    if (!allowed.has(input.status)) return { ok: false, code: 400, error: "INVALID_STATUS", detail: "status must be acknowledged|running|completed|failed" };
+    const detail = input.detail == null ? null : String(input.detail).slice(0, 1000);
+    const thread = this.getThread(input.threadId);
+    if (!thread) return { ok: false, code: 404, error: "THREAD_NOT_FOUND" };
+    if (thread.status === "closed") return { ok: false, code: 409, error: "THREAD_CLOSED", detail: "Closed thread: receipts can be read but cannot be newly acknowledged." };
+    const msg = this.getMessage(input.messageId);
+    if (!msg || msg.thread_id !== input.threadId) return { ok: false, code: 404, error: "MESSAGE_NOT_FOUND" };
+    const targets = this.deriveTaskReceiptTargets(msg);
+    if (!targets.includes(input.targetAgentId)) return { ok: false, code: 404, error: "RECEIPT_TARGET_NOT_FOUND", detail: "Target agent is not a valid mention receipt for this message." };
+    if (!this.getThreadAgents(input.threadId).some(a => a.id === input.targetAgentId)) return { ok: false, code: 403, error: "NOT_A_THREAD_PARTICIPANT" };
+
+    const row = this.persistenceDb.prepare(
+      `SELECT status, version, detail, updated_at FROM task_receipts WHERE thread_id=? AND message_id=? AND target_agent_id=?`
+    ).get(input.threadId, input.messageId, input.targetAgentId) as Record<string, unknown> | undefined;
+    const current = row ? { status: String(row.status), version: Number(row.version || 0), detail: row.detail == null ? null : String(row.detail), updated_at: String(row.updated_at) } : { status: "awaiting_ack", version: 0, detail: null, updated_at: msg.created_at };
+
+    if (input.expectedVersion !== current.version) {
+      return { ok: false, code: 409, error: "VERSION_CONFLICT", detail: `expected_version ${input.expectedVersion} does not match current ${current.version}`, receipt: this.taskReceiptView(msg, input.targetAgentId, current) };
+    }
+    // Idempotent same state
+    if (input.status === current.status) {
+      // allow detail refresh? spec says "重复同状态幂等" - keep idempotent, no version bump
+      return { ok: true, receipt: this.taskReceiptView(msg, input.targetAgentId, current) };
+    }
+    // State machine
+    const terminal = new Set(["completed", "failed"]);
+    if (terminal.has(current.status)) return { ok: false, code: 409, error: "INVALID_TRANSITION", detail: "Terminal receipt cannot transition." };
+    const valid: Record<string, Set<string>> = {
+      awaiting_ack: new Set(["acknowledged"]),
+      acknowledged: new Set(["running", "completed", "failed"]),
+      running: new Set(["completed", "failed"]),
+    };
+    if (!valid[current.status]?.has(input.status)) {
+      return { ok: false, code: 409, error: "INVALID_TRANSITION", detail: `Cannot transition ${current.status} -> ${input.status}` };
+    }
+
+    const now = new Date().toISOString();
+    const next = { status: input.status, version: current.version + 1, detail, updated_at: now };
+    this.persistenceDb.prepare(
+      `INSERT INTO task_receipts(thread_id,message_id,message_seq,target_agent_id,status,version,detail,updated_at)
+       VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT(thread_id,message_id,target_agent_id) DO UPDATE SET
+         status=excluded.status, version=excluded.version, detail=excluded.detail, updated_at=excluded.updated_at, message_seq=excluded.message_seq`
+    ).run(input.threadId, input.messageId, msg.seq, input.targetAgentId, next.status, next.version, next.detail, next.updated_at);
+    eventBus.emit({ type: "task.receipt.updated", payload: { thread_id: input.threadId, message_id: input.messageId, target_agent_id: input.targetAgentId, status: next.status, version: next.version } });
+    return { ok: true, receipt: this.taskReceiptView(msg, input.targetAgentId, next) };
+  }
+
+  private taskReceiptView(msg: MessageRecord, targetAgentId: string, state: { status: string; version: number; detail?: string | null; updated_at: string }) {
+    const agent = this.getAgent(targetAgentId);
+    const view: any = {
+      message_id: msg.id,
+      message_seq: msg.seq,
+      target_agent_id: targetAgentId,
+      status: state.status,
+      delivery_mode: "manual_pull",
+      can_auto_wake: false,
+      connection_type: this.taskReceiptConnectionType(agent),
+      updated_at: state.updated_at,
+      version: state.version,
+    };
+    if (state.detail) view.detail = state.detail;
+    return view;
   }
 
   /** Fix #4: Clean up old events from the persistence DB */

@@ -744,10 +744,10 @@
     const emoji = String(admin?.admin_emoji || "").trim() || "🤖";
     const adminType = String(admin?.admin_type || "").trim();
     const suffix = adminType === "creator"
-      ? "creator admin"
-      : (adminType === "auto_assigned" ? "meeting admin" : "admin");
+      ? "创建者管理"
+      : (adminType === "auto_assigned" ? "轮值管理" : "admin");
     adminEl.hidden = false;
-    adminEl.textContent = `Admin: ${emoji} ${adminName} (${suffix})`;
+    adminEl.textContent = `管理员: ${emoji} ${adminName} (${suffix})`;
   }
 
   async function refreshThreadAdmin(threadId, api) {
@@ -768,11 +768,37 @@
     }
   }
 
+  let _activeChatGeneration = 0;
+  let _activeChatThreadId = null;
+
   function getMaxVisibleSeq(messages) {
     return (Array.isArray(messages) ? messages : []).reduce((maxSeq, message) => {
       const seq = typeof message?.seq === "number" ? message.seq : Number(message?.seq);
       return Number.isFinite(seq) ? Math.max(maxSeq, seq) : maxSeq;
     }, 0);
+  }
+
+  async function fetchFullTranscript(id, api, checkActive) {
+    let allMsgs = [];
+    let afterSeq = 0;
+    const pageSize = 200;
+    while (true) {
+      if (checkActive && !checkActive()) return null;
+      const includePrompt = (afterSeq === 0) ? '1' : '0';
+      const batch = (await api(`/api/threads/${id}/transcript?after_seq=${afterSeq}&limit=${pageSize}&include_system_prompt=${includePrompt}`)) || [];
+      if (checkActive && !checkActive()) return null;
+      if (!batch || !batch.length) break;
+      allMsgs = allMsgs.concat(batch);
+      const last = batch[batch.length - 1];
+      const lastSeq = typeof last?.seq === 'number' ? last.seq : Number(last?.seq);
+      if (Number.isFinite(lastSeq) && lastSeq > afterSeq) {
+        afterSeq = lastSeq;
+      } else {
+        break;
+      }
+      if (batch.length < pageSize) break;
+    }
+    return allMsgs;
   }
 
   async function loadTranscript({
@@ -790,76 +816,110 @@
     messagesEl = null,
     sysPromptEl = null,
     skipCliActivity = false,
+    generation = null,
   }) {
+    const isMain = !messagesEl;
+    if (isMain && _activeChatThreadId === null) {
+      _activeChatThreadId = id;
+    }
+    const currentGen = isMain ? (typeof generation === 'number' ? generation : ++_activeChatGeneration) : null;
+    if (isMain && typeof generation !== 'number') {
+      _activeChatGeneration = currentGen;
+      _activeChatThreadId = id;
+    }
+    const checkActive = isMain ? () => (_activeChatGeneration === currentGen && _activeChatThreadId === id) : null;
+
+    if (checkActive && !checkActive()) return;
+
     const box = messagesEl || document.getElementById("messages");
     if (!box) {
       return;
     }
-    setLastSeq(0);
-    if (typeof clearThreadParticipants === "function") {
-      clearThreadParticipants();
-    }
-    box.innerHTML = "";
-    if (!skipCliActivity) {
-      clearCliActivityRows(id, clearCliCache);
-    }
-    const sysPromptAreaEl = sysPromptEl || document.getElementById("sys-prompt-area");
-    if (sysPromptAreaEl) {
-      sysPromptAreaEl.innerHTML = "";
-    }
+
+    if (checkActive && !checkActive()) return;
     box.classList.add("loading-history");
 
-    const msgs =
-      (await api(`/api/threads/${id}/transcript?after_seq=0&limit=400&include_system_prompt=1`)) ||
-      [];
-    if (typeof rebuildActiveThreadParticipants === "function") {
-      rebuildActiveThreadParticipants(msgs);
-    }
-    msgs.forEach(appendBubble);
-    if (!skipCliActivity) {
-      const cachedSessions = getThreadActivityCache(id);
-      if (cachedSessions && !clearCliCache) {
-        for (const session of cachedSessions.values()) {
-          renderCliActivitySession(session, false);
+    try {
+      const msgs = await fetchFullTranscript(id, api, checkActive);
+      if (msgs === null || (checkActive && !checkActive())) {
+        return;
+      }
+
+      setLastSeq(0);
+      if (typeof clearThreadParticipants === "function") {
+        clearThreadParticipants();
+      }
+      box.innerHTML = "";
+      if (!skipCliActivity) {
+        clearCliActivityRows(id, clearCliCache);
+      }
+      const sysPromptAreaEl = sysPromptEl || document.getElementById("sys-prompt-area");
+      if (sysPromptAreaEl) {
+        sysPromptAreaEl.innerHTML = "";
+      }
+
+      if (checkActive && !checkActive()) return;
+
+      if (typeof rebuildActiveThreadParticipants === "function") {
+        rebuildActiveThreadParticipants(msgs);
+      }
+      msgs.forEach(appendBubble);
+      if (!skipCliActivity) {
+        const cachedSessions = getThreadActivityCache(id);
+        if (cachedSessions && !clearCliCache) {
+          for (const session of cachedSessions.values()) {
+            renderCliActivitySession(session, false);
+          }
         }
       }
+      if (typeof updateOnlinePresence === "function") {
+        updateOnlinePresence();
+      }
+      if (typeof updateStatusBar === "function") {
+        await updateStatusBar();
+      }
+      if (checkActive && !checkActive()) return;
+
+      if (refreshAdmin) {
+        await refreshThreadAdmin(id, api);
+      }
+      if (checkActive && !checkActive()) return;
+
+      setLastSeq(getMaxVisibleSeq(msgs));
+      if (window.AcbMessageRenderer?.renderMermaidBlocks) {
+        await window.AcbMessageRenderer.renderMermaidBlocks(box);
+      }
+      if (checkActive && !checkActive()) return;
+
+      if (typeof scrollBottom === "function") {
+        scrollBottom(false);
+      }
+      refreshHumanDeliveryIndicators(id);
+    } finally {
+      if (!checkActive || checkActive()) {
+        box.classList.remove("loading-history");
+      }
     }
-    if (typeof updateOnlinePresence === "function") {
-      updateOnlinePresence();
-    }
-    if (typeof updateStatusBar === "function") {
-      await updateStatusBar();
-    }
-    if (refreshAdmin) {
-      await refreshThreadAdmin(id, api);
-    }
-    setLastSeq(getMaxVisibleSeq(msgs));
-    if (window.AcbMessageRenderer?.renderMermaidBlocks) {
-      await window.AcbMessageRenderer.renderMermaidBlocks(box);
-    }
-    if (typeof scrollBottom === "function") {
-      scrollBottom(false);
-    }
-    box.classList.remove("loading-history");
   }
 
-  async function selectThread({
-    id,
-    topic,
-    status,
-    initialSyncContext,
-    setThreadSyncContext,
-    setActiveThread,
-    clearThreadParticipants,
-    api,
-    rebuildActiveThreadParticipants,
-    appendBubble,
-    updateOnlinePresence,
-    updateStatusBar,
-    setLastSeq,
-    scrollBottom,
-  }) {
-    setActiveThread(id, status);
+  async function selectThread(options) {
+    const id = options?.id;
+    const topic = options?.topic;
+    const status = options?.status;
+    const initialSyncContext = options?.initialSyncContext;
+    const setThreadSyncContext = options?.setThreadSyncContext;
+    const setActiveThread = options?.setActiveThread;
+    const generation = options?.generation;
+
+    const currentGen = typeof generation === 'number' ? generation : ++_activeChatGeneration;
+    _activeChatGeneration = currentGen;
+    _activeChatThreadId = id;
+    invalidateReceiptFetches();
+    ensureComposeHint();
+
+    if (typeof setActiveThread === 'function') {
+      setActiveThread(id, status);
+    }
     window.currentThreadId = id;  // Set global currentThreadId for modals
     if (setThreadSyncContext) {
       setThreadSyncContext(id, initialSyncContext || null);
@@ -869,19 +929,16 @@
     const ti = document.getElementById(`ti-${id}`);
     if (ti) ti.classList.add("active");
 
-    document.getElementById("thread-header").style.display = "flex";
-    document.getElementById("thread-title").textContent = topic;
-    document.getElementById("compose").classList.toggle("visible", status !== "archived");
+    const header = document.getElementById("thread-header");
+    if (header) header.style.display = "flex";
+    const title = document.getElementById("thread-title");
+    if (title) title.textContent = topic;
+    const compose = document.getElementById("compose");
+    if (compose) compose.classList.toggle("visible", status !== "archived");
+
     await loadTranscript({
-      id,
-      api,
-      clearThreadParticipants,
-      rebuildActiveThreadParticipants,
-      appendBubble,
-      updateOnlinePresence,
-      updateStatusBar,
-      setLastSeq,
-      scrollBottom,
+      ...options,
+      generation: currentGen,
       refreshAdmin: true,
       clearCliCache: true,
     });
@@ -1052,6 +1109,9 @@
     });
   }
 
+  let _isSendingMessage = false;
+  let _sendGeneration = 0;
+
   async function sendMessage({
     getActiveThreadId,
     getLastSeq,
@@ -1064,36 +1124,41 @@
     appendBubble,
     scrollBottom,
   }) {
+    if (_isSendingMessage) return;
+
     const activeThreadId = getActiveThreadId();
     const input = document.getElementById("compose-input");
     if (!input || !activeThreadId) return;
-    const author = document.getElementById("compose-author").value.trim() || "human";
-    const acb = document.querySelector('acb-compose-shell');
+    const author = document.getElementById("compose-author")?.value?.trim() || "human";
+    const acb = document.querySelector("acb-compose-shell");
+    const sendGen = ++_sendGeneration;
+    const isTargetStillValid = () => getActiveThreadId() === activeThreadId && sendGen === _sendGeneration;
 
     // Extract content and mentions with full recursion for nested structures
     const mentions = [];
     const mentionLabels = {};
     function extractRichContent(root) {
-      let text = '';
-      for (const node of root.childNodes) {
+      if (!root) return "";
+      let text = "";
+      const nodes = root.childNodes || [];
+      for (const node of nodes) {
         if (node.nodeType === 3) {
-          text += node.textContent;
+          text += node.textContent || "";
         } else if (node.nodeType === 1) {
           // If it's a mention pill
-          if (node.hasAttribute('data-mention-id')) {
-            const mid = node.getAttribute('data-mention-id');
-            const mlabel = node.getAttribute('data-mention-label') || node.textContent.replace(/^@/, '');
+          if (typeof node.hasAttribute === "function" && node.hasAttribute("data-mention-id")) {
+            const mid = node.getAttribute("data-mention-id");
+            const mlabel = node.getAttribute("data-mention-label") || (node.textContent || "").replace(/^@/, "");
             if (!mentions.includes(mid)) {
               mentions.push(mid);
               mentionLabels[mid] = mlabel;
             }
-            text += node.textContent; // Include "@Nickname" in plain text
+            text += node.textContent || "";
           } else {
-            // Normal element (like a div from Enter or a br)
             const innerText = extractRichContent(node);
             text += innerText;
-            if (node.tagName === 'DIV' || node.tagName === 'P' || node.tagName === 'BR') {
-              if (text && !text.endsWith('\n')) text += '\n';
+            if (node.tagName === "DIV" || node.tagName === "P" || node.tagName === "BR") {
+              if (text && !text.endsWith("\n")) text += "\n";
             }
           }
         }
@@ -1102,104 +1167,607 @@
     }
 
     const content = extractRichContent(input).trim();
-    // Get uploaded images first so image-only messages can be sent.
-    const images = acb?.uploadedImages || [];
+    const initialInputHtml = input._innerHTML != null ? input._innerHTML : input.innerHTML;
+    const initialInputText = content;
+    const images = (acb && Array.isArray(acb.uploadedImages)) ? [...acb.uploadedImages] : [];
 
     if (!content && images.length === 0) return;
 
-    updateOnlinePresence();
-    input.innerHTML = '';
-    const messageBar = document.getElementById("mentions-bar");
-    if (messageBar) messageBar.style.display = 'none';
-    if (acb && acb.uploadedImages) acb.uploadedImages = [];
-    if (acb && acb.renderImagePreview) acb.renderImagePreview();
+    _isSendingMessage = true;
+    const sendBtn = document.getElementById("btn-send");
+    if (sendBtn) sendBtn.disabled = true;
 
-    const payload = {
-      author,
-      role: "user",
-      content,
-      mentions: mentions.length > 0 ? mentions : undefined,
-      metadata: mentions.length > 0 ? { mention_labels: mentionLabels } : undefined,
-      images: images.length > 0 ? images : undefined
-    };
+    try {
+      updateOnlinePresence();
 
-    const loadFreshSyncContext = async () => {
-      return await api(`/api/threads/${activeThreadId}/sync-context`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-    };
+      const payload = {
+        author,
+        role: "user",
+        content,
+        mentions: mentions.length > 0 ? mentions : undefined,
+        metadata: mentions.length > 0 ? { mention_labels: mentionLabels } : undefined,
+        images: images.length > 0 ? images : undefined,
+      };
 
-    const isValidSyncContext = (sync) =>
-      sync && typeof sync.current_seq === "number" && typeof sync.reply_token === "string" && sync.reply_token;
+      const loadFreshSyncContext = async () => {
+        return await api(`/api/threads/${activeThreadId}/sync-context`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+      };
 
-    const isValidMessageResponse = (message) =>
-      message && typeof message.id === "string" && typeof message.seq === "number" && typeof message.content === "string";
+      const isValidSyncContext = (sync) =>
+        sync && typeof sync.current_seq === "number" && typeof sync.reply_token === "string" && sync.reply_token;
 
-    let sync = getThreadSyncContext ? getThreadSyncContext(activeThreadId) : null;
-    const knownLastSeq = typeof getLastSeq === "function" ? Number(getLastSeq()) || 0 : 0;
-    if (isValidSyncContext(sync) && Number(sync.current_seq) < knownLastSeq) {
-      sync = null;
-    }
-    if (!isValidSyncContext(sync)) {
-      sync = await loadFreshSyncContext();
-    }
-    if (!isValidSyncContext(sync)) {
-      console.warn("[Chat] Unable to obtain sync context for human message.");
-      return;
-    }
+      const isValidMessageResponse = (message) =>
+        message && typeof message.id === "string" && typeof message.seq === "number" && typeof message.content === "string";
 
-    let response = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      payload.expected_last_seq = sync.current_seq;
-      payload.reply_token = sync.reply_token;
-
-      response = await api(`/api/threads/${activeThreadId}/messages`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      if (isValidMessageResponse(response)) {
-        break;
+      let sync = getThreadSyncContext ? getThreadSyncContext(activeThreadId) : null;
+      const knownLastSeq = typeof getLastSeq === "function" ? Number(getLastSeq()) || 0 : 0;
+      if (isValidSyncContext(sync) && Number(sync.current_seq) < knownLastSeq) {
+        sync = null;
       }
-
-      if (response?.error === "SEQ_MISMATCH" && attempt === 0) {
+      if (!isValidSyncContext(sync)) {
         sync = await loadFreshSyncContext();
-        if (!isValidSyncContext(sync)) {
-          console.warn("[Chat] Unable to refresh sync context after SEQ_MISMATCH.");
-          return;
+      }
+      if (!isTargetStillValid()) return;
+      if (!isValidSyncContext(sync)) {
+        console.warn("[Chat] Unable to obtain sync context for human message; draft retained.");
+        return;
+      }
+
+      let response = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        payload.expected_last_seq = sync.current_seq;
+        payload.reply_token = sync.reply_token;
+
+        response = await api(`/api/threads/${activeThreadId}/messages`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+
+        if (!isTargetStillValid()) return;
+
+        if (isValidMessageResponse(response)) {
+          break;
         }
-        continue;
+
+        if (response?.error === "SEQ_MISMATCH" && attempt === 0) {
+          sync = await loadFreshSyncContext();
+          if (!isTargetStillValid()) return;
+          if (!isValidSyncContext(sync)) {
+            console.warn("[Chat] Unable to refresh sync context after SEQ_MISMATCH; draft retained.");
+            return;
+          }
+          continue;
+        }
+
+        console.warn("[Chat] Message send failed; draft retained:", response);
+        return;
       }
 
-      console.warn("[Chat] Message send failed:", response);
-      return;
-    }
+      if (isValidMessageResponse(response) && isTargetStillValid()) {
+        // Clear draft ONLY on verified send success, same thread & generation, and user hasn't edited
+        const currentInputHtml = input._innerHTML != null ? input._innerHTML : input.innerHTML;
+        const currentInputText = extractRichContent(input).trim();
+        const isDraftUnedited = (currentInputHtml === initialInputHtml) || (currentInputText === initialInputText);
 
-    if (isValidMessageResponse(response)) {
-      if (setThreadSyncContext) {
-        setThreadSyncContext(activeThreadId, null);
+        if (isDraftUnedited) {
+          input.innerHTML = "";
+          if (Array.isArray(input.childNodes)) input.childNodes = [];
+          const messageBar = document.getElementById("mentions-bar");
+          if (messageBar) messageBar.style.display = "none";
+          if (acb && Array.isArray(acb.uploadedImages)) acb.uploadedImages = [];
+          if (acb && typeof acb.renderImagePreview === "function") acb.renderImagePreview();
+          if (typeof autoResize === "function") autoResize();
+        } else {
+          // User edited during flight: preserve new edits; filter out only the sent images
+          if (acb && Array.isArray(acb.uploadedImages)) {
+            acb.uploadedImages = acb.uploadedImages.filter(img =>
+              !images.includes(img) && !images.some(sent => sent && sent.id && sent.id === img?.id)
+            );
+            if (typeof acb.renderImagePreview === "function") acb.renderImagePreview();
+          }
+        }
+
+        if (setThreadSyncContext) {
+          setThreadSyncContext(activeThreadId, null);
+        }
+        setLastSeq((prev) => Math.max(prev, response.seq));
+        appendBubble(response);
+        scrollBottom(true);
       }
-      setLastSeq((prev) => Math.max(prev, response.seq));
-      appendBubble(response);
-      scrollBottom(true);
+    } catch (err) {
+      console.error("[Chat] Error sending message; draft retained:", err);
+    } finally {
+      _isSendingMessage = false;
+      if (sendBtn) sendBtn.disabled = false;
     }
   }
-
-  function handleKey(e, sendMessageFn) {
+    function handleKey(e, sendMessageFn) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessageFn();
     }
   }
 
-  function refreshHumanDeliveryIndicators(threadId) {
-    void threadId;
-    document.querySelectorAll("#messages .msg-row[data-is-human='1']").forEach((row) => {
-      const deliveryMetaEl = row.querySelector(".msg-human-delivery");
-      if (deliveryMetaEl) {
-        deliveryMetaEl.remove();
+  // ==========================================================================
+  // Task Receipts & Directed Message Presentation Engine (Refined)
+  // ==========================================================================
+  let _receiptFetchGeneration = 0;
+  const _receiptThread404Cache = new Set();
+  let _receiptCoalesceScheduled = false;
+  let _pendingReceiptResolvers = [];
+  let _pendingReceiptThreadId = null;
+  let _pendingReceiptCustomFetch = null;
+  let _customAgentResolver = null;
+  let _receiptActiveJob = null;
+
+  function invalidateReceiptFetches() {
+    _receiptFetchGeneration++;
+    _receiptActiveJob = null;
+    _pendingReceiptResolvers.forEach((r) => {
+      try { r(); } catch {}
+    });
+    _pendingReceiptResolvers = [];
+    _pendingReceiptThreadId = null;
+    _pendingReceiptCustomFetch = null;
+  }
+
+  function setAgentResolver(resolver) {
+    if (typeof resolver === "function") {
+      _customAgentResolver = resolver;
+    }
+  }
+
+  function ensureTaskReceiptsCss() {
+    if (typeof document === "undefined" || !document.head) return;
+    if (document.getElementById("task-receipts-css") || document.querySelector('link[href*="task-receipts.css"]')) {
+      return;
+    }
+    try {
+      const link = document.createElement("link");
+      link.id = "task-receipts-css";
+      link.rel = "stylesheet";
+      link.href = "/static/css/task-receipts.css?v=1";
+      document.head.appendChild(link);
+    } catch {}
+  }
+
+  function ensureComposeHint() {
+    if (typeof document === "undefined") return;
+    try {
+      const composeWrap = document.getElementById("compose") || (document.querySelector && document.querySelector("acb-compose-shell"));
+      if (!composeWrap) return;
+
+      let hintEl = document.getElementById("compose-task-hint");
+      if (!hintEl) {
+        hintEl = document.createElement("div");
+        hintEl.id = "compose-task-hint";
+        hintEl.className = "compose-task-hint";
+        hintEl.innerHTML = `
+          <span class="cth-icon" aria-hidden="true">💡</span>
+          <span class="cth-text cth-text-full">要指定任务请用 @ 选择身份，直接写昵称不会分配任务</span>
+          <span class="cth-text cth-text-short">@ 选择智能体分配任务</span>
+          <span id="compose-web-agent-warning" class="cth-web-warning" style="display:none;"> · ⚠️ 选择网页 agent 需要其主动查看</span>
+        `;
+        hintEl.title = '使用 @ 选择真实身份；直接输入昵称不会分配任务。网页智能体需主动查看。';
+
+        const inputEl = document.getElementById("compose-input");
+        if (inputEl && inputEl.parentNode) {
+          inputEl.parentNode.insertBefore(hintEl, inputEl);
+        } else {
+          composeWrap.appendChild(hintEl);
+        }
       }
+
+      const inputEl = document.getElementById("compose-input");
+      if (inputEl && !inputEl._hasReceiptMentionListener) {
+        inputEl._hasReceiptMentionListener = true;
+        inputEl.addEventListener("input", syncComposeWebAgentWarning);
+        if (typeof MutationObserver === "function") {
+          const observer = new MutationObserver(syncComposeWebAgentWarning);
+          observer.observe(inputEl, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-mention-id"] });
+          inputEl._receiptMentionObserver = observer;
+        }
+      }
+      syncComposeWebAgentWarning();
+    } catch {}
+  }
+
+  function findMentionsRecursively(node, result = []) {
+    if (!node) return result;
+    if (node.nodeType === 1) {
+      if (typeof node.getAttribute === "function" && node.getAttribute("data-mention-id")) {
+        result.push(String(node.getAttribute("data-mention-id") || "").trim());
+      }
+      for (const child of node.childNodes || []) {
+        findMentionsRecursively(child, result);
+      }
+    }
+    return result;
+  }
+
+  function syncComposeWebAgentWarning() {
+    if (typeof document === "undefined") return;
+    try {
+      const warningEl = document.getElementById("compose-web-agent-warning");
+      if (!warningEl) return;
+      const inputEl = document.getElementById("compose-input");
+      if (!inputEl) return;
+
+      const mentionIds = findMentionsRecursively(inputEl);
+      let hasWebMention = false;
+
+      for (const mid of mentionIds) {
+        const targetInfo = getReceiptTargetInfo(mid);
+        if (targetInfo && targetInfo.isWebSession) {
+          hasWebMention = true;
+          break;
+        }
+      }
+
+      warningEl.style.display = hasWebMention ? "inline" : "none";
+    } catch {}
+  }
+
+  function getReceiptTargetInfo(targetAgentId) {
+    const rawId = String(targetAgentId || "").trim();
+
+    if (typeof window !== "undefined" && window.AcbAvatarSystem) {
+      try {
+        const resolved = window.AcbAvatarSystem.resolveAgentAvatar(rawId);
+        if (resolved && resolved.canonicalAgentId) {
+          return {
+            name: String(resolved.displayName || rawId).trim(),
+            emoji: String(resolved.emoji || "🤖").trim(),
+            isWebSession: Boolean(resolved.isWebSession),
+          };
+        }
+      } catch {}
+    }
+
+    // 1. Custom agent resolver if configured by host/index
+    if (typeof _customAgentResolver === "function") {
+      try {
+        const custom = _customAgentResolver(rawId);
+        if (custom) {
+          const isWeb = Boolean(
+            custom.isWebSession ||
+            custom.is_web_session ||
+            custom.connection_type === "browser" ||
+            custom.capabilities?.includes("browser-ui") ||
+            custom.capabilities?.includes("web-session-presence") ||
+            String(custom.model || "").toLowerCase().includes("web session") ||
+            custom.last_activity === "browser_heartbeat"
+          );
+          return {
+            name: String(custom.display_name || custom.name || rawId).trim(),
+            emoji: String(custom.emoji || (isWeb ? "🍍" : "🤖")).trim(),
+            isWebSession: isWeb,
+          };
+        }
+      } catch {}
+    }
+
+    // 2. Global agents cache
+    const globalAgents = (typeof window !== "undefined" && (window.__acbCurrentAgents || window.currentAgents)) || [];
+    const matched = globalAgents.find((a) => String(a.id || a.agent_id || "").trim() === rawId);
+    if (matched) {
+      const isWeb = Boolean(
+        matched.isWebSession ||
+        matched.is_web_session ||
+        matched.connection_type === "browser" ||
+        matched.capabilities?.includes("browser-ui") ||
+        matched.capabilities?.includes("web-session-presence") ||
+        String(matched.model || "").toLowerCase().includes("web session") ||
+        matched.last_activity === "browser_heartbeat"
+      );
+      return {
+        name: String(matched.display_name || matched.name || rawId).trim(),
+        emoji: String(matched.emoji || (isWeb ? "🍍" : "🤖")).trim(),
+        isWebSession: isWeb,
+      };
+    }
+
+    // 3. Fallback: discover from DOM status items
+    if (typeof document !== "undefined" && typeof document.querySelector === "function") {
+      try {
+        const statusItem = document.querySelector(`acb-agent-status-item[data-agent-id="${rawId}"], [data-agent-id="${rawId}"]`);
+        if (statusItem) {
+          const label = statusItem.getAttribute("data-agent-label") || statusItem.dataset?.agentLabel;
+          const emojiEl = statusItem.querySelector ? statusItem.querySelector(".asi-avatar, .acb-seat-avatar span") : null;
+          const emoji = emojiEl ? emojiEl.textContent.trim() : "🤖";
+          const isWeb = statusItem.getAttribute("data-session-type") === "browser" || statusItem.dataset?.sessionType === "browser";
+          if (label) {
+            return { name: label, emoji: emoji || "🤖", isWebSession: isWeb };
+          }
+        }
+      } catch {}
+    }
+
+    const shortId = rawId.length > 12 ? rawId.slice(0, 8) + "…" : rawId;
+    return { name: shortId || "Agent", emoji: "🤖", isWebSession: false };
+  }
+
+  const RECEIPT_STATUS_MAP = {
+    awaiting_ack: {
+      label: "待确认",
+      className: "mtr-status-badge--awaiting_ack",
+      desc: "等待 agent 主动查看，尚未自动投递",
+    },
+    acknowledged: {
+      label: "已接单",
+      className: "mtr-status-badge--acknowledged",
+      desc: "agent 已确认接收该任务，准备执行",
+    },
+    running: {
+      label: "执行中",
+      className: "mtr-status-badge--running",
+      desc: "agent 正在执行任务",
+    },
+    completed: {
+      label: "完成",
+      className: "mtr-status-badge--completed",
+      desc: "任务已执行完毕",
+    },
+    failed: {
+      label: "失败",
+      className: "mtr-status-badge--failed",
+      desc: "任务执行失败或发生错误",
+    },
+    unavailable: {
+      label: "回执暂不可用",
+      className: "mtr-status-badge--unavailable",
+      desc: "服务暂未同步此定向任务状态",
+    },
+  };
+
+  function renderReceiptItemHtml(receipt, fallbackTargetId = "") {
+    const statusKey = String(receipt?.status || "unavailable").toLowerCase();
+    const statusMeta = RECEIPT_STATUS_MAP[statusKey] || RECEIPT_STATUS_MAP.unavailable;
+    const targetId = String(receipt?.target_agent_id || fallbackTargetId || "").trim();
+    const targetInfo = getReceiptTargetInfo(targetId);
+    const isBrowser = receipt?.connection_type === "browser" || targetInfo.isWebSession;
+
+    const esc = (str) => String(str ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
+
+    return `
+      <div class="msg-task-receipt" data-status="${esc(statusKey)}" data-target-id="${esc(targetId)}">
+        <div class="mtr-header">
+          <span class="mtr-target-icon">${esc(targetInfo.emoji)}</span>
+          <span class="mtr-target-name">${esc(targetInfo.name)}</span>
+          <span class="mtr-status-badge ${esc(statusMeta.className)}">${esc(statusMeta.label)}</span>
+        </div>
+        <div class="mtr-desc">${esc(statusMeta.desc)}</div>
+        ${isBrowser ? '<div class="mtr-browser-warning">网页在线不表示模型执行</div>' : ""}
+      </div>
+    `;
+  }
+
+  function renderRowReceipts(row, receipts, fallbackNotice = "") {
+    if (!row) return;
+    if (row.isConnected !== undefined && row.isConnected === false) return;
+
+    try {
+      const targetCol = (row.querySelector && row.querySelector(".msg-col")) || row;
+      let container = targetCol.querySelector ? targetCol.querySelector(".msg-task-receipts") : null;
+
+      if (!receipts || receipts.length === 0) {
+        if (fallbackNotice) {
+          if (!container && typeof document !== "undefined" && typeof document.createElement === "function") {
+            container = document.createElement("div");
+            container.className = "msg-task-receipts";
+            targetCol.appendChild(container);
+          }
+          if (container) {
+            container.innerHTML = `
+              <div class="msg-task-receipt" data-status="unavailable">
+                <div class="mtr-header">
+                  <span class="mtr-status-badge mtr-status-badge--unavailable">回执暂不可用</span>
+                </div>
+                <div class="mtr-desc">${fallbackNotice}</div>
+              </div>
+            `;
+          }
+        } else if (container && typeof container.remove === "function") {
+          container.remove();
+        }
+        return;
+      }
+
+      if (!container && typeof document !== "undefined" && typeof document.createElement === "function") {
+        container = document.createElement("div");
+        container.className = "msg-task-receipts";
+        targetCol.appendChild(container);
+      }
+
+      if (container) {
+        container.innerHTML = receipts.map((r) => renderReceiptItemHtml(r)).join("");
+      }
+    } catch {}
+  }
+
+  async function _executeReceiptsFetch(activeId, fetchFn) {
+    if (!activeId || !fetchFn) return;
+
+    const generation = ++_receiptFetchGeneration;
+
+    // Clean legacy elements if any
+    if (typeof document !== "undefined" && typeof document.querySelectorAll === "function") {
+      document.querySelectorAll("#messages .msg-human-delivery").forEach((el) => {
+        if (typeof el.remove === "function") el.remove();
+      });
+    }
+
+    const allRows = typeof document !== "undefined" && typeof document.querySelectorAll === "function"
+      ? Array.from(document.querySelectorAll("#messages .msg-row"))
+      : [];
+
+    const directedRows = allRows.filter((row) => {
+      if (row.classList && typeof row.classList.contains === "function" && row.classList.contains("message-has-mentions")) return true;
+      if (row.querySelector && (row.querySelector("[data-mention-id]") || row.querySelector(".mention-chip"))) return true;
+      return false;
+    });
+
+    if (directedRows.length === 0) {
+      return;
+    }
+
+    // Determine min and max seq of visible loaded rows to avoid scanning outside bounds
+    let minSeq = Infinity;
+    let maxSeq = 0;
+    directedRows.forEach((r) => {
+      const seqAttr = r.getAttribute ? r.getAttribute("data-seq") : r.dataset?.seq;
+      const seq = seqAttr != null ? parseInt(seqAttr, 10) : NaN;
+      if (!isNaN(seq) && Number.isFinite(seq)) {
+        if (seq < minSeq) minSeq = seq;
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    });
+
+    const startAfterSeq = Math.max(0, isFinite(minSeq) ? minSeq - 1 : 0);
+    const targetMaxSeq = isFinite(maxSeq) ? maxSeq : Infinity;
+
+    if (_receiptThread404Cache.has(activeId)) {
+      directedRows.forEach((r) => renderRowReceipts(r, null, "服务暂未同步此定向任务状态"));
+      return;
+    }
+
+    const isStale = () => {
+      if (generation !== _receiptFetchGeneration) return true;
+      if (typeof window !== "undefined" && window.currentThreadId && window.currentThreadId !== activeId) return true;
+      return false;
+    };
+
+    let cursor = startAfterSeq;
+    const allReceipts = [];
+    const MAX_PAGES = 10;
+    let pageCount = 0;
+
+    while (pageCount++ < MAX_PAGES) {
+      if (isStale()) return;
+
+      const url = `/api/threads/${encodeURIComponent(activeId)}/task-receipts?after_seq=${cursor}&limit=200`;
+      let res;
+      try {
+        res = await fetchFn(url);
+      } catch (err) {
+        if (isStale()) return;
+        directedRows.forEach((r) => renderRowReceipts(r, null, "回执暂不可用（网络连接异常）"));
+        return;
+      }
+
+      if (isStale()) return;
+
+      if (res && res.status === 404) {
+        _receiptThread404Cache.add(activeId);
+        directedRows.forEach((r) => renderRowReceipts(r, null, "服务暂未同步此定向任务状态"));
+        return;
+      }
+
+      if (!res || !res.ok) {
+        directedRows.forEach((r) => renderRowReceipts(r, null, "回执暂不可用"));
+        return;
+      }
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        if (isStale()) return;
+        directedRows.forEach((r) => renderRowReceipts(r, null, "回执数据解析异常"));
+        return;
+      }
+
+      if (isStale()) return;
+
+      const pageReceipts = Array.isArray(data?.receipts) ? data.receipts : [];
+      allReceipts.push(...pageReceipts);
+
+      const hasMore = Boolean(data?.has_more);
+      const nextSeq = typeof data?.next_seq === "number" ? data.next_seq : null;
+
+      if (!hasMore || nextSeq === null || nextSeq <= cursor || nextSeq > targetMaxSeq) {
+        break;
+      }
+
+      cursor = nextSeq;
+    }
+
+    if (isStale()) return;
+
+    const receiptsByMsgId = new Map();
+    const receiptsBySeq = new Map();
+
+    allReceipts.forEach((r) => {
+      if (r.message_id) {
+        const mid = String(r.message_id).trim();
+        if (!receiptsByMsgId.has(mid)) receiptsByMsgId.set(mid, []);
+        receiptsByMsgId.get(mid).push(r);
+      }
+      if (typeof r.message_seq === "number") {
+        const seq = r.message_seq;
+        if (!receiptsBySeq.has(seq)) receiptsBySeq.set(seq, []);
+        receiptsBySeq.get(seq).push(r);
+      }
+    });
+
+    directedRows.forEach((row) => {
+      const msgId = String(row.getAttribute ? (row.getAttribute("data-msg-id") || "") : "").trim();
+      const seqAttr = row.getAttribute ? row.getAttribute("data-seq") : null;
+      const seq = seqAttr != null ? parseInt(seqAttr, 10) : NaN;
+
+      const matchingReceipts = (msgId && receiptsByMsgId.get(msgId)) || (!isNaN(seq) && receiptsBySeq.get(seq)) || [];
+
+      if (matchingReceipts.length > 0) {
+        renderRowReceipts(row, matchingReceipts);
+      } else {
+        renderRowReceipts(row, null, "回执暂不可用");
+      }
+    });
+  }
+
+  function scheduleReceiptDrain() {
+    if (_receiptCoalesceScheduled || _receiptActiveJob) return;
+    _receiptCoalesceScheduled = true;
+    const scheduleFn = typeof queueMicrotask === "function" ? queueMicrotask : (fn) => setTimeout(fn, 0);
+    scheduleFn(async () => {
+      _receiptCoalesceScheduled = false;
+      const targetThread = _pendingReceiptThreadId;
+      if (!targetThread) return;
+      const resolvers = _pendingReceiptResolvers.splice(0);
+      const targetFetch = _pendingReceiptCustomFetch || (typeof fetch === "function" ? fetch : null);
+      _pendingReceiptThreadId = null;
+      _pendingReceiptCustomFetch = null;
+      const job = {};
+      _receiptActiveJob = job;
+      try {
+        await _executeReceiptsFetch(targetThread, targetFetch);
+      } finally {
+        resolvers.forEach(r => { try { r(); } catch {} });
+        if (_receiptActiveJob === job) {
+          _receiptActiveJob = null;
+          if (_pendingReceiptThreadId) scheduleReceiptDrain();
+        }
+      }
+    });
+  }
+
+  function refreshHumanDeliveryIndicators(threadId, customFetch = null) {
+    ensureTaskReceiptsCss();
+    ensureComposeHint();
+
+    const activeId = String(threadId || (typeof window !== "undefined" ? window.currentThreadId : "") || "").trim();
+    if (!activeId) return Promise.resolve();
+
+    _pendingReceiptThreadId = activeId;
+    if (customFetch) _pendingReceiptCustomFetch = customFetch;
+
+    return new Promise((resolve) => {
+      _pendingReceiptResolvers.push(resolve);
+
+      scheduleReceiptDrain();
     });
   }
 
@@ -1220,5 +1788,22 @@
     sendMessage,
     handleKey,
     refreshHumanDeliveryIndicators,
+    setAgentResolver,
+    invalidateReceiptFetches,
   };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("acb-avatar-bindings-changed", () => {
+      document.querySelectorAll(".msg-task-receipt").forEach((el) => {
+        const targetId = el.getAttribute("data-target-id");
+        if (targetId) {
+          const info = getReceiptTargetInfo(targetId);
+          const iconEl = el.querySelector(".mtr-target-icon");
+          const nameEl = el.querySelector(".mtr-target-name");
+          if (iconEl) iconEl.textContent = info.emoji;
+          if (nameEl) nameEl.textContent = info.name;
+        }
+      });
+    });
+  }
 })();

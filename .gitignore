@@ -88,3 +88,28 @@ CLAUDE.md
 .serena/
 .cursorignore
 .cursorindexingignore
+
+# Machine-local runtime, coordination records and verification artifacts
+/runtime/
+/work/
+/logs/
+/outputs/
+/docs/coordination/
+/docs/research/
+/云端运行说明.md
+/本地使用说明.txt
+/本地优化说明.txt
+*.bak
+
+# Private credentials and local databases (never publish)
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+.env.*
+!.env.example
+!.env.sample

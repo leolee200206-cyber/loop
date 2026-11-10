@@ -14,6 +14,7 @@
  */
 
 import { createInterface } from "node:readline";
+import { toMcpContent } from "../mcp/toolContent.js";
 
 const BASE_URL = process.env.AGENTCHATBUS_BASE_URL || "http://127.0.0.1:39766";
 const MCP_URL = `${BASE_URL.replace(/\/+$/, "")}/mcp`;
@@ -228,7 +229,7 @@ async function handleRequest(payload: Record<string, unknown>): Promise<Record<s
       return {
         jsonrpc: "2.0",
         id,
-        result: { content: Array.isArray(result) ? result : [{ type: "text", text: JSON.stringify(result) }] },
+        result: { content: toMcpContent(result) },
       };
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);

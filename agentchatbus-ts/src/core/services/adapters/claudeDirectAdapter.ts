@@ -1225,16 +1225,17 @@ class ClaudeDirectStreamParser {
       return;
     }
     if (isToolUseBlockType(type)) {
-      this.startToolState(
-        {
-          id,
-          type,
-          name,
-          input,
-          toolUseId,
-        },
-        name || "Using tool",
-      );
+      const toolState: ClaudeToolState = {
+        id,
+        type,
+        name,
+        input,
+        toolUseId,
+      };
+      this.upsertToolState(toolState);
+      if (input && Object.keys(input).length > 0) {
+        this.emitTool(toolState, "in_progress", name || "Using tool");
+      }
       return;
     }
     if (isToolResultBlockType(type) && toolUseId) {

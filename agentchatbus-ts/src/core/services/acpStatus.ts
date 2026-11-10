@@ -1,3 +1,5 @@
+import { getConfig } from "../config/env.js";
+import { resolveNativeAcpCommand } from "./nativeCommand.js";
 /**
  * ACP agent status detection and enabled-state management.
  *
@@ -51,16 +53,16 @@ export interface AcpAgentStatusResult {
 // ---------------------------------------------------------------------------
 
 function getEnabledStatePath(): string {
-  const dir = join(homedir(), ".config", "agentchatbus");
+  const dir = getConfig().appDir;
   return join(dir, "acp-agents-enabled.json");
 }
 
 function loadEnabledState(): Record<string, boolean> {
   try {
-    const path = getEnabledStatePath();
-    if (!existsSync(path)) {
-      return {};
-    }
+    const localPath = getEnabledStatePath();
+    const legacyPath = join(homedir(), ".config", "agentchatbus", "acp-agents-enabled.json");
+    const path = existsSync(localPath) ? localPath : legacyPath;
+    if (!existsSync(path)) return {};
     const raw = readFileSync(path, "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -150,7 +152,10 @@ function detectAgentStatus(
   let status: AcpAgentStatus = "unknown";
   let statusDetail = "";
 
-  if (agent.distribution === "npx") {
+  if (resolveNativeAcpCommand(agent.id)) {
+    status = "available";
+    statusDetail = `Found local native ACP executable: ${spawnInfo.command}`;
+  } else if (agent.distribution === "npx") {
     // npx agents are "available" if npx itself is on PATH.
     // The package will be auto-downloaded on first spawn.
     if (isNpxAvailable()) {

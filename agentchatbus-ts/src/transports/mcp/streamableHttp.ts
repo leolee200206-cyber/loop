@@ -17,6 +17,7 @@ import {
 import { callTool, listTools, withToolCallContext } from "../../adapters/mcp/tools.js";
 import { BUS_VERSION } from "../../core/config/env.js";
 import { getPromptResult, getPromptsList, getResourcesList, readResourceText } from "./handlers.js";
+import { toMcpContent } from "./toolContent.js";
 
 // Store active transports by session ID
 const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
@@ -61,12 +62,7 @@ export function createMcpServer(sessionId?: string): Server {
     console.log(`[mcp-streamable] tools/call result: ${JSON.stringify(result).slice(0, 200)}`);
 
     // Convert result to MCP content blocks format
-    if (Array.isArray(result)) {
-      return { content: result };
-    }
-    return {
-      content: [{ type: "text", text: JSON.stringify(result) }],
-    };
+    return { content: toMcpContent(result) };
   });
 
   // List resources handler

@@ -84,33 +84,11 @@ type JsonRpcResponseEnvelope = {
   };
 };
 
+// Version-specific names go stale. Query the installed client or let the user
+// select its default / enter an exact model ID. Claude's stable aliases remain.
 const STATIC_MODELS: Record<CliSessionAdapterId, CliDiscoveredModel[]> = {
-  cursor: [],
-  copilot: [],
-  claude: [
-    { id: "sonnet", label: "sonnet" },
-    { id: "opus", label: "opus" },
-    { id: "haiku", label: "haiku" },
-    { id: "claude-sonnet-4-6", label: "claude-sonnet-4-6" },
-    { id: "claude-opus-4-6", label: "claude-opus-4-6" },
-  ],
-  codex: [
-    { id: "gpt-5.4", label: "gpt-5.4" },
-    { id: "gpt-5-mini", label: "gpt-5-mini" },
-    { id: "gpt-5.3-codex", label: "gpt-5.3-codex" },
-    { id: "gpt-5.2-codex", label: "gpt-5.2-codex" },
-    { id: "gpt-5.2", label: "gpt-5.2" },
-    { id: "gpt-5.1-codex-max", label: "gpt-5.1-codex-max" },
-    { id: "gpt-5.1-codex-mini", label: "gpt-5.1-codex-mini" },
-    { id: "gpt-4.1", label: "gpt-4.1" },
-  ],
-  gemini: [
-    { id: "gemini-3.1-pro-preview", label: "gemini-3.1-pro-preview" },
-    { id: "gemini-3-flash-preview", label: "gemini-3-flash-preview" },
-    { id: "gemini-2.5-pro", label: "gemini-2.5-pro" },
-    { id: "gemini-2.5-flash", label: "gemini-2.5-flash" },
-    { id: "gemini-2.5-flash-lite", label: "gemini-2.5-flash-lite" },
-  ],
+  cursor: [], copilot: [], codex: [], gemini: [],
+  claude: ["sonnet", "opus", "haiku"].map(id => ({ id, label: id })),
 };
 
 function nowIso(): string {
@@ -205,7 +183,7 @@ function buildStaticEntry(
     strategy: "static",
     models: uniqueModels(STATIC_MODELS[adapter] || []),
     fetched_at: fetchedAt,
-    source_label: "Static fallback",
+    source_label: "Client default / manual model ID",
     ...(error ? { error } : {}),
   };
 }
@@ -673,13 +651,6 @@ export class CliModelDiscoveryService {
       };
     } catch (error) {
       const fallback = buildStaticEntry("copilot", fetchedAt, error instanceof Error ? error.message : String(error));
-      fallback.models = uniqueModels([
-        { id: "gpt-5.4", label: "gpt-5.4" },
-        { id: "gpt-5.3-codex", label: "gpt-5.3-codex" },
-        { id: "gpt-5-mini", label: "gpt-5-mini" },
-        { id: "claude-sonnet-4.6", label: "claude-sonnet-4.6" },
-        { id: "gemini-3-pro-preview", label: "gemini-3-pro-preview" },
-      ]);
       return fallback;
     }
   }
@@ -715,7 +686,7 @@ export class CliModelDiscoveryService {
       };
     } catch (error) {
       const fallback = buildStaticEntry("codex", fetchedAt, error instanceof Error ? error.message : String(error));
-      fallback.source_label = "Codex app-server failed; static fallback";
+      fallback.source_label = "Codex discovery unavailable; use client default / manual model ID";
       return fallback;
     }
   }

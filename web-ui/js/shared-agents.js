@@ -195,6 +195,18 @@
       participants = allAgents.filter((a) => a.is_online || a.is_sse_connected);
     }
 
+    // Defensive dedupe: never render duplicate seats for the same agent id.
+    // Canonical/alias projection is server-side; do NOT collapse by display name
+    // (same name != same identity).
+    const seenParticipantIds = new Set();
+    participants = participants.filter((a) => {
+      const pid = String(a?.id ?? a?.agent_id ?? "").trim();
+      if (!pid) return true;
+      if (seenParticipantIds.has(pid)) return false;
+      seenParticipantIds.add(pid);
+      return true;
+    });
+
     participants.sort((a, b) => {
       // First sort by online status (online first)
       if (a.is_online !== b.is_online) {
@@ -241,6 +253,13 @@
       });
       const compressedChar = getCompressedOfflineChar(offlineTime);
       const isStdio = isStdioAgent ? isStdioAgent(a) : false;
+      const isWebSession = Boolean(
+        a?.capabilities?.includes("browser-ui") ||
+        a?.capabilities?.includes("web-session-presence") ||
+        String(a?.model || "").toLowerCase().includes("web session") ||
+        a?.last_activity === "browser_heartbeat" ||
+        a?.last_activity === "browser_leave"
+      );
       const tooltipText = unifiedStatus?.tooltipText
         || (getTooltipText
           ? getTooltipText(a, state, offlineTime, {
@@ -261,6 +280,7 @@
         isLongOffline,
         compressedChar,
         isStdio,
+        isWebSession,
         tooltipText,
         skills: a.skills,
         escapeHtml,

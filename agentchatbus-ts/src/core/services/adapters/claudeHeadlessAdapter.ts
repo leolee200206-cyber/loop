@@ -1,3 +1,4 @@
+import { resolveLocalCommand } from "../nativeCommand.js";
 import { dirname } from "node:path";
 import { existsSync } from "node:fs";
 import spawn from "cross-spawn";
@@ -121,7 +122,7 @@ export function parseClaudeHeadlessResult(stdout: string): ClaudeResultEnvelope 
 }
 
 export function resolveClaudeCommand(): string {
-  return "claude";
+  return resolveLocalCommand("claude") || "claude";
 }
 
 class ClaudeHeadlessExecutor implements ClaudeCommandExecutor {

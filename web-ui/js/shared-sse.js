@@ -85,6 +85,10 @@
       const activeThreadId = getActiveThreadId();
       const compareThreadId = typeof getCompareThreadId === "function" ? getCompareThreadId() : null;
 
+      if (ev.type === "task.receipt.updated" && p.thread_id === activeThreadId) {
+        await window.AcbChat?.refreshHumanDeliveryIndicators?.(activeThreadId);
+      }
+
       if (ev.type === "msg.new") {
         if (p.thread_id === activeThreadId && onMsgNew) {
           await onMsgNew();

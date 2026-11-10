@@ -154,6 +154,7 @@ async function runServeSmokeTest() {
     const healthResponse = await waitForHttpOk(`http://127.0.0.1:${port}/health`, 8000);
     const healthPayload = await healthResponse.json();
     assert.equal(healthPayload.status, "ok");
+    assert.ok(fs.existsSync(path.join(appDir, "proxy.mjs")), "V2 MCP proxy must be installed even in the CJS bundle");
 
     const staticResponse = await waitForHttpOk(`http://127.0.0.1:${port}/static/index.html`, 4000);
     const staticHtml = await staticResponse.text();

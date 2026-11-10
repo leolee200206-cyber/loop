@@ -2,9 +2,9 @@ import { startHttpServer } from "../transports/http/server.js";
 import { startSocketServer, getAgentSocketPath } from "../transports/socket/server.js";
 import { getConfig } from "../core/config/env.js";
 import { logInfo } from "../shared/logger.js";
-import { copyFileSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { resolveAcpSocketProxyScript } from "../core/services/acpMcpProxyPath.js";
 
 /**
  * In V2 mode, copy the proxy script to the shared app directory so that
@@ -15,37 +15,17 @@ function ensureProxyScriptInAppDir(): string | null {
   try {
     const config = getConfig();
     const targetPath = join(config.appDir, "proxy.mjs");
-    // Find the source proxy.mjs relative to this compiled file.
-    // In bundled mode: dist/cli/index.js → dist/transports/socket/proxy.mjs
-    // In dev mode:     src/cli/serve.ts  → src/transports/socket/proxy.mjs (via tsx)
-    const thisDir = dirname(fileURLToPath(import.meta.url));
-    const candidates = [
-      join(thisDir, "transports", "socket", "proxy.mjs"),
-      join(thisDir, "..", "transports", "socket", "proxy.mjs"),
-      join(thisDir, "..", "..", "transports", "socket", "proxy.mjs"),
-    ];
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) {
-        if (!existsSync(targetPath) || readFileSyncSafe(candidate) !== readFileSyncSafe(targetPath)) {
-          copyFileSync(candidate, targetPath);
-          logInfo(`[v2] Copied proxy script to ${targetPath}`);
-        }
-        return targetPath;
-      }
+    // The CLI bundle is CJS: resolve assets from the actual entry path,
+    // not import.meta.url, which is empty after bundling.
+    const candidate = resolveAcpSocketProxyScript();
+    if (!existsSync(targetPath) || readFileSync(candidate, "utf-8") !== readFileSync(targetPath, "utf-8")) {
+      copyFileSync(candidate, targetPath);
+      logInfo(`[v2] Copied proxy script to ${targetPath}`);
     }
-    logInfo(`[v2] Warning: could not locate proxy.mjs to copy to app dir`);
-    return null;
+    return targetPath;
   } catch (err) {
     logInfo(`[v2] Warning: failed to copy proxy script: ${err instanceof Error ? err.message : String(err)}`);
     return null;
-  }
-}
-
-function readFileSyncSafe(p: string): string {
-  try {
-    return require("node:fs").readFileSync(p, "utf-8");
-  } catch {
-    return "";
   }
 }
 

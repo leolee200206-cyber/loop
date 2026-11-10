@@ -14,7 +14,7 @@
         <div id="compose">
           <div id="compose-author-wrap">
             <span id="compose-author-avatar">👤</span>
-            <input id="compose-author" type="text" value="human" placeholder="name" />
+            <input id="compose-author" type="text" value="用户" placeholder="发言人" />
           </div>
           <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
             <div id="mentions-bar" style="display:none; padding: 5px; font-size: 0.85em; background: rgba(0,0,0,0.1); border-radius: 4px; margin-bottom: 5px;">
@@ -22,16 +22,16 @@
               <button type="button" onclick="clearMentions()" style="margin-left: 10px; cursor: pointer; border: none; background: transparent; color: #666;">❌</button>
             </div>
             <div id="image-preview" style="display:none; padding: 8px; background: rgba(100,150,200,.08); border-radius: 4px; margin-bottom: 5px; gap:8px; flex-wrap:wrap;"></div>
-            <div id="compose-input" contenteditable="true" style="overflow-y: auto; word-break: break-word;" placeholder="Send a message... Click an agent's row below to mention them!" onkeydown="handleKey(event)"></div>
+            <div id="compose-input" contenteditable="true" style="overflow-y: auto; word-break: break-word;" placeholder="输入消息... (Enter 发送，Shift+Enter 换行)" onkeydown="handleKey(event)"></div>
           </div>
-          <button id="btn-send" title="Send" aria-label="Send">↑</button>
+          <button id="btn-send" title="发送 (Enter)" aria-label="发送消息">↑</button>
         </div>`;
 
       // Fix 2 — Persistance du nom via localStorage
       const authorInput = this.querySelector('#compose-author');
       if (authorInput) {
         const savedName = localStorage.getItem('acb-human-name');
-        if (savedName) authorInput.value = savedName;
+        if (savedName && savedName !== 'human') authorInput.value = savedName; else authorInput.value = '用户';
         authorInput.addEventListener('input', () => {
           const val = authorInput.value.trim();
           if (val) localStorage.setItem('acb-human-name', val);

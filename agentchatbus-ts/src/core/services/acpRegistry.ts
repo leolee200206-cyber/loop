@@ -1,3 +1,4 @@
+import { resolveNativeAcpCommand } from "./nativeCommand.js";
 /**
  * ACP (Agent Client Protocol) agent registry.
  *
@@ -378,6 +379,9 @@ export function resolveAcpSpawnCommand(
   if (!agent) {
     return null;
   }
+
+  const native = resolveNativeAcpCommand(agentId);
+  if (native) return native;
 
   if (agent.distribution === "npx" && agent.npx) {
     const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";

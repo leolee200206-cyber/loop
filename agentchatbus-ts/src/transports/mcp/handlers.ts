@@ -5,6 +5,7 @@
 import { callTool, listTools, withToolCallContext } from "../../adapters/mcp/tools.js";
 import { BUS_VERSION, getConfig, getConfigDict } from "../../core/config/env.js";
 import { getMemoryStore } from "../http/server.js";
+import { toMcpContent } from "./toolContent.js";
 
 type JsonRpcRequest = {
   id?: string | number | null;
@@ -289,13 +290,10 @@ export async function handleToolsCall(body: JsonRpcRequest): Promise<Record<stri
   const args = (params.arguments as Record<string, unknown> | undefined) || {};
   const result = await withToolCallContext({}, () => callTool(name, args));
 
-  if (Array.isArray(result)) {
-    return { jsonrpc: "2.0", id: body.id ?? null, result: { content: result } };
-  }
   return {
     jsonrpc: "2.0",
     id: body.id ?? null,
-    result: { content: [{ type: "text", text: JSON.stringify(result) }] },
+    result: { content: toMcpContent(result) },
   };
 }
 

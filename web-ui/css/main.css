@@ -1,3 +1,4 @@
+@import "agent-avatar-system.css";
 /* ====================================================================================
    Reset & Base
 ==================================================================================== */
@@ -10,25 +11,86 @@
 }
 
 :root {
-  --bg-base: #0a0d12;
-  --bg-panel: #0f1318;
-  --bg-card: #151a22;
-  --bg-hover: #1a2030;
-  --bg-input: #111620;
-  --border: #1e2635;
-  --border-light: #253040;
-  --accent: #3b82f6;
-  --accent-dim: #1d4ed8;
-  --accent-glow: rgba(59, 130, 246, .18);
-  --green: #22c55e;
+  --bg-base: #090a0f;
+  --bg-panel: #111319;
+  --bg-card: #161922;
+  --bg-hover: #1d212d;
+  --bg-input: #141720;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.12);
+  --accent: #6366f1;
+  --accent-dim: #4f46e5;
+  --accent-glow: rgba(99, 102, 241, 0.22);
+  --green: #10b981;
   --amber: #f59e0b;
-  --purple: #a855f7;
+  --purple: #8b5cf6;
   --red: #ef4444;
-  --text-1: #e2e8f0;
-  --text-2: #94a3b8;
-  --text-3: #4b5563;
-  --radius: 10px;
-  --shadow: 0 4px 24px rgba(0, 0, 0, .5);
+  --text-1: #f8fafc;
+  --text-2: #cbd5e1;
+  --text-3: #94a3b8;
+  --radius: 8px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.65);
+
+  /* Linear Archetype Tokens */
+  --acb-canvas: #090a0f;
+  --acb-surface-1: #111319;
+  --acb-surface-2: #161922;
+  --acb-surface-3: #1d212d;
+  --acb-surface-4: #242938;
+  --acb-hairline-subtle: rgba(255, 255, 255, 0.05);
+  --acb-hairline: rgba(255, 255, 255, 0.09);
+  --acb-hairline-strong: rgba(255, 255, 255, 0.16);
+  --acb-hairline-focus: rgba(99, 102, 241, 0.6);
+  --acb-text-primary: #f8fafc;
+  --acb-text-secondary: #cbd5e1;
+  --acb-text-muted: #94a3b8;
+  --acb-text-subtle: #64748b;
+  --acb-brand-primary: #6366f1;
+  --acb-brand-hover: #818cf8;
+  --acb-brand-glow: rgba(99, 102, 241, 0.25);
+  --acb-brand-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --acb-opencode-primary: #0ea5e9;
+  --acb-opencode-gradient: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
+}
+
+/* Header View Mode Selector Pills */
+.header-view-pill-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-panel, #111319);
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  margin-right: 4px;
+}
+
+.header-view-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-2, #94a3b8);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header-view-pill:hover {
+  color: var(--text-1, #f8fafc);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.header-view-pill.active {
+  background: #6366f1;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.35);
 }
 
 html,
@@ -129,11 +191,9 @@ body[data-theme="light"] .ctx-item:hover {
   background: #e8f0ff;
 }
 
+/* BUG-03 fix: Calm neutral card, no giant amber text walls */
 body[data-theme="light"] .msg-row.message-has-mentions .bubble-v2 {
-  background: linear-gradient(135deg, rgba(255, 235, 130, .12) 0%, rgba(255, 193, 7, .08) 100%);
-  border-color: rgba(255, 193, 7, .4);
-  box-shadow: inset 0 0 12px rgba(255, 193, 7, .1),
-    0 0 20px rgba(255, 193, 7, .15);
+  border-left: 3px solid var(--accent, #4f46e5);
 }
 
 /* ====================================================================================
@@ -782,12 +842,15 @@ body[data-theme="light"] .thread-item .ti-pin-btn {
 }
 
 .online-dot.on {
-  background: var(--green);
-  box-shadow: 0 0 6px var(--green);
+  background: var(--green, #10b981);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+  animation: acb-avatar-breathe 2.4s ease-in-out infinite;
 }
 
 .online-dot.off {
-  background: var(--text-3);
+  background: var(--text-3, #64748b);
+  box-shadow: none;
+  animation: none;
 }
 
 /* ---- Main area ---- */
@@ -828,6 +891,12 @@ body[data-theme="light"] .thread-item .ti-pin-btn {
   color: var(--text-2);
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
+}
+
+[hidden],
+.compare-panel[hidden],
+#compare-panel[hidden] {
+  display: none !important;
 }
 
 .compare-panel {
@@ -1819,41 +1888,55 @@ body[data-theme="light"] .cli-session-detail__empty {
 }
 
 /* ── Messages with mentions (Phase 2 notification) ── */
+/* BUG-03 fix: Calm neutral card, local inline pills for mentions */
 .msg-row.message-has-mentions .bubble-v2 {
-  background: linear-gradient(135deg, rgba(255, 250, 205, .08) 0%, rgba(255, 193, 7, .05) 100%);
-  border-color: rgba(255, 193, 7, .3);
-  box-shadow: inset 0 0 12px rgba(255, 193, 7, .08),
-    0 0 20px rgba(255, 193, 7, .12);
+  border-left: 3px solid var(--accent, #6366f1);
 }
 
 .msg-row.message-has-mentions {
   position: relative;
 }
 
-.msg-row.message-has-mentions::before {
-  content: "";
-  position: absolute;
-  left: -6px;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: linear-gradient(to bottom, #ff9800, #ffc107);
-  border-radius: 2px;
-}
-
 .msg-avatar {
+  position: relative;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: var(--acb-avatar-radius-md, 10px);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: 0;
   margin-top: 2px;
-  filter: drop-shadow(0 0 0.7px rgba(255, 255, 255, 0.5));
+  box-shadow: var(--acb-avatar-specular, inset 0 1px 0 rgba(255, 255, 255, 0.22)), 0 2px 6px rgba(0, 0, 0, 0.28);
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
+  user-select: none;
+}
+
+.msg-avatar:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: var(--acb-avatar-specular, inset 0 1px 0 rgba(255, 255, 255, 0.28)), 0 4px 10px rgba(0, 0, 0, 0.36);
+}
+
+.msg-avatar[data-state="online"],
+.msg-avatar.online {
+  border: 1px solid var(--acb-status-online-border, rgba(16, 185, 129, 0.65)) !important;
+  box-shadow: var(--acb-avatar-specular, inset 0 1px 0 rgba(255, 255, 255, 0.22)), 0 0 0 1px var(--acb-status-online-border, rgba(16, 185, 129, 0.5)), 0 2px 8px var(--acb-status-online-halo, rgba(16, 185, 129, 0.3));
+}
+
+.msg-avatar[data-state="offline"],
+.msg-avatar[data-state="disconnected"],
+.msg-avatar.offline {
+  filter: grayscale(0.85) contrast(0.92);
+  opacity: 0.68;
+}
+
+.msg-avatar[data-session-type="browser"],
+.msg-avatar.browser-session {
+  border: 1px solid var(--acb-status-browser-border, rgba(14, 165, 233, 0.65)) !important;
+  box-shadow: var(--acb-avatar-specular, inset 0 1px 0 rgba(255, 255, 255, 0.22)), 0 0 0 1px var(--acb-status-browser-border, rgba(14, 165, 233, 0.5)), 0 2px 8px var(--acb-status-browser-halo, rgba(14, 165, 233, 0.3));
 }
 
 .msg-avatar-interactive {
@@ -3638,7 +3721,9 @@ body[data-theme="light"] #empty-state .es-ad-banner-note {
 }
 
 /** Agent Status Bar **/
+/* V2: Hide redundant bottom agent-status-bar */
 #agent-status-bar {
+  display: none !important;
   display: flex;
   background: var(--bg-base);
   border-top: 1px solid var(--border-light);
@@ -3712,21 +3797,24 @@ body[data-theme="light"] .agent-status-action--danger {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--bg-card, #12141a);
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
   white-space: nowrap;
   flex-shrink: 0;
   color: var(--text-1);
   cursor: default;
-  transition: background 0.15s;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 .agent-status-item:hover {
-  background: var(--bg-hover, var(--bg-input));
-  filter: brightness(1.08);
+  transform: translateY(-1px);
+  background: var(--bg-hover, #181b22);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 12px rgba(0, 0, 0, 0.32);
 }
 
 /* Left: 48x48 avatar emoji */
@@ -3745,13 +3833,47 @@ body[data-theme="light"] .agent-status-action--danger {
 .asi-avatar {
   width: 48px;
   height: 48px;
-  font-size: 40px;
+  border-radius: 12px;
+  font-size: 32px;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.5));
+  box-shadow: var(--acb-avatar-specular, inset 0 1px 0 rgba(255, 255, 255, 0.22)), 0 2px 6px rgba(0, 0, 0, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+.agent-status-item:hover .asi-avatar {
+  transform: scale(1.03);
+}
+
+/* Status variants on .agent-status-item */
+.agent-status-item[data-state="connected"] .asi-avatar,
+.agent-status-item[data-state="online"] .asi-avatar {
+  border: 1px solid var(--acb-status-online-border, rgba(16, 185, 129, 0.65)) !important;
+  box-shadow: var(--acb-avatar-specular, inset 0 1px 0 rgba(255, 255, 255, 0.22)),
+              0 0 0 1.5px var(--acb-status-online-border, rgba(16, 185, 129, 0.65)),
+              0 2px 10px var(--acb-status-online-halo, rgba(16, 185, 129, 0.35));
+  animation: acb-avatar-ring-pulse 3s ease-in-out infinite;
+}
+
+.agent-status-item[data-state="disconnected"] .asi-avatar,
+.agent-status-item[data-state="offline"] .asi-avatar {
+  filter: grayscale(0.85) contrast(0.92);
+  opacity: 0.68;
+  border: 1px solid var(--acb-status-offline-border, rgba(255, 255, 255, 0.08)) !important;
+  box-shadow: none;
+  animation: none;
+}
+
+.agent-status-item[data-session-type="browser"] .asi-avatar,
+.agent-status-item[data-state="browser_session"] .asi-avatar {
+  border: 1px solid var(--acb-status-browser-border, rgba(14, 165, 233, 0.65)) !important;
+  box-shadow: var(--acb-avatar-specular, inset 0 1px 0 rgba(255, 255, 255, 0.22)),
+              0 0 0 1.5px var(--acb-status-browser-border, rgba(14, 165, 233, 0.65)),
+              0 2px 8px var(--acb-status-browser-halo, rgba(14, 165, 233, 0.3));
+  animation: none;
 }
 
 .asi-admin-badge {
@@ -3789,11 +3911,18 @@ body[data-theme="light"] .agent-status-action--danger {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  background: var(--bg-hover, rgba(255,255,255,0.05));
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.asi-status-box:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 /* Bottom box: 24x24 transport type */
@@ -3803,12 +3932,20 @@ body[data-theme="light"] .agent-status-action--danger {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1;
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  background: var(--bg-hover, rgba(255,255,255,0.05));
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: background 0.15s, border-color 0.15s;
 }
+
+.asi-transport-box:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
 
 /* State emoji (legacy class for compatibility) */
 .asi-state-emoji {
@@ -5364,8 +5501,11 @@ body[data-theme="light"] #topbar-note-pypi {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
     background: transparent;
     border: 1px solid var(--border-light);
     border-radius: 8px;
@@ -6438,4 +6578,687 @@ body[data-theme="light"] .mermaid-btn:hover {
   background: #dbeafe;
   border-color: #93c5fd;
   color: #1e40af;
+}
+
+
+/* ============================================================
+   AgentChatBus V2: Linear Architecture & Segmented Workspace
+   ============================================================ */
+
+/* Segmented View Switcher in Header */
+.acb-view-segmented {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.acb-segmented-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2, #8b949e);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+
+.acb-segmented-item:hover {
+  color: var(--text-1, #f0f2f5);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.acb-segmented-item.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  font-weight: 600;
+}
+
+.acb-segmented-item svg {
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.acb-segmented-item.active svg {
+  opacity: 1;
+}
+
+/* Compact Participant Roster Pill in Header */
+.thread-participants-roster {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 100px;
+  font-size: 12px;
+  color: var(--text-2, #8b949e);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.thread-participants-roster:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-1, #f0f2f5);
+}
+
+.thread-participants-roster .roster-avatars {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.thread-participants-roster .roster-avatar {
+  font-size: 13px;
+  margin-left: -4px;
+}
+
+.thread-participants-roster .roster-avatar:first-child {
+  margin-left: 0;
+}
+
+/* Header More Menu Dropdown */
+.acb-header-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.acb-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  min-width: 160px;
+  background: var(--bg-surface-elevated, #16181a);
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: none;
+}
+
+.acb-dropdown-menu.visible {
+  display: block;
+}
+
+.acb-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-1, #f0f2f5);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.acb-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Desktop Split Mode: Side-by-Side with 100% vertical viewport */
+@media (min-width: 900px) {
+  body.view-mode-split #sys-prompt-area {
+    display: none !important;
+  }
+
+  body.view-mode-split #messages-wrap {
+    display: flex !important;
+    flex-direction: row !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body.view-mode-split #acb-3d-arena {
+    display: flex !important;
+    flex: 1 1 50% !important;
+    width: 50% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    border-right: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+  }
+
+  body.view-mode-split #chat-body {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 50% !important;
+    width: 50% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body.view-mode-split #chat-main-column {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  body.view-mode-split #chat-main-inner {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  body.view-mode-split #messages-scroll {
+    flex: 1 1 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+}
+
+/* Mobile Split Mode (<= 899px, e.g. 390px): Clean Stack without 280px clamping */
+@media (max-width: 899px) {
+  body.view-mode-split #messages-wrap {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+  }
+
+  body.view-mode-split #acb-3d-arena {
+    display: block !important;
+    flex: 0 0 45% !important;
+    height: 45% !important;
+    min-height: 220px !important;
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+  }
+
+  body.view-mode-split #chat-body {
+    display: flex !important;
+    flex: 1 1 55% !important;
+    height: 55% !important;
+    min-height: 0 !important;
+  }
+}
+
+
+/* ============================================================
+   AgentChatBus V2: Workspace Stage & Dynamic Split Flex
+   ============================================================ */
+
+#workspace-stage {
+  display: flex;
+  flex: 1 1 100%;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+body.view-mode-timeline #workspace-stage #acb-3d-arena {
+  display: none !important;
+}
+
+body.view-mode-timeline #workspace-stage #chat-body {
+  display: flex !important;
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+body.view-mode-3d #workspace-stage {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 460px !important;
+}
+
+body.view-mode-3d #workspace-stage #acb-3d-arena {
+  display: flex !important;
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 460px !important;
+}
+
+body.view-mode-3d #workspace-stage #chat-body {
+  display: none !important;
+}
+
+/* Desktop Split Mode (>= 900px): 50/50 Side-by-Side */
+@media (min-width: 900px) {
+  body.view-mode-split #workspace-stage {
+    display: flex !important;
+    flex-direction: row !important;
+    flex: 1 1 auto !important;
+    height: 100% !important;
+    min-height: 460px !important;
+    overflow: hidden !important;
+  }
+  body.view-mode-split #workspace-stage #acb-3d-arena {
+    display: flex !important;
+    flex: 0 0 50% !important;
+    width: 50% !important;
+    max-width: 50% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    border-right: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+    overflow: hidden !important;
+  }
+  body.view-mode-split #workspace-stage #chat-body {
+    display: flex !important;
+    flex: 0 0 50% !important;
+    width: 50% !important;
+    max-width: 50% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    flex-direction: row !important;
+    overflow: hidden !important;
+  }
+  body.view-mode-split #chat-main-column {
+    display: flex !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+  body.view-mode-split #chat-main-inner {
+    display: flex !important;
+    flex-direction: row !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+  body.view-mode-split #messages-scroll {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+  body.view-mode-split #nav-sidebar {
+    display: none !important;
+  }
+}
+
+/* Mobile Split Mode (< 900px, e.g. 390px): Clean Stack */
+@media (max-width: 899px) {
+  body.view-mode-split #workspace-stage {
+    flex-direction: column !important;
+  }
+  body.view-mode-split #workspace-stage #acb-3d-arena {
+    display: flex !important;
+    flex: 0 0 45% !important;
+    height: 45% !important;
+    min-height: 220px !important;
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+  }
+  body.view-mode-split #workspace-stage #chat-body {
+    display: flex !important;
+    flex: 1 1 55% !important;
+    height: 55% !important;
+    min-height: 0 !important;
+  }
+}
+
+
+/* Mobile Responsive Header, Actions, Segmented Controls & Composer (<= 600px) — SaaS Standard Overhaul */
+@media (max-width: 600px) {
+  /* 1. Header Layout */
+  #thread-header {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    height: auto !important;
+    min-height: 84px !important;
+    padding: 8px 12px 10px 12px !important;
+    gap: 8px !important;
+    align-items: center !important;
+    box-sizing: border-box !important;
+  }
+
+  .thread-header__title-stack {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    order: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    gap: 2px !important;
+  }
+
+  #thread-title {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    line-height: 1.35 !important;
+    max-width: calc(100vw - 120px) !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+  }
+
+  .thread-header__actions {
+    flex: 0 0 auto !important;
+    order: 2 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  /* 44px Interactive Touch Targets for header icon buttons */
+  .header-icon-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    border-radius: 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .header-icon-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+    stroke-width: 2 !important;
+  }
+
+  /* 2. Segmented Switcher — 44px touch target & text never squeezed into vertical characters */
+  .acb-view-segmented {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    order: 3 !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 2px !important;
+    gap: 4px !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  .acb-segmented-item {
+    flex: 1 1 0% !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 0 6px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    border-radius: 6px !important;
+    box-sizing: border-box !important;
+  }
+
+  .acb-segmented-item svg {
+    width: 14px !important;
+    height: 14px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .thread-participants-roster {
+    display: none !important;
+  }
+
+  /* 3. More Menu Dropdown — 44px Touch Targets, modern SaaS elevated card */
+  .acb-dropdown-menu {
+    min-width: 200px !important;
+    max-width: calc(100vw - 24px) !important;
+    padding: 6px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45) !important;
+    z-index: 1000 !important;
+  }
+
+  .acb-dropdown-item {
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    box-sizing: border-box !important;
+  }
+
+  .acb-dropdown-item svg {
+    width: 16px !important;
+    height: 16px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* 4. Composer Area — 44px Touch Targets & Clean Hierarchy */
+  #compose {
+    padding: 8px 10px !important;
+    gap: 8px !important;
+    align-items: flex-end !important;
+    box-sizing: border-box !important;
+  }
+
+  #compose-author-wrap {
+    height: 44px !important;
+    min-height: 44px !important;
+    padding: 4px 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+  }
+
+  #compose-author {
+    width: 48px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    border: none !important;
+    background: transparent !important;
+    color: inherit !important;
+  }
+
+  #compose-input {
+    padding: 10px 12px !important;
+    font-size: 14px !important;
+    min-height: 44px !important;
+    line-height: 1.4 !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  #compose-input:empty::before {
+    content: "输入消息..." !important;
+  }
+
+  #btn-send {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    border-radius: 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 18px !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .compose-task-hint {
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+    border-radius: 6px !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* 5. System prompt & Workspace stage compact sizes */
+  .msg-sys-prompt {
+    margin: 4px 6px 8px !important;
+    border-radius: 12px !important;
+  }
+
+  .msg-sys-prompt-header {
+    border-radius: 12px !important;
+    min-height: 28px !important;
+    padding: 4px 10px !important;
+    font-size: 11px !important;
+  }
+
+  .msg-sys-prompt-body {
+    max-height: 200px !important;
+    padding: 6px 10px !important;
+  }
+
+  #workspace-stage {
+    min-height: 340px !important;
+  }
+}
+
+/* ==========================================================================
+   AgentChatBus SaaS Workbench Light Mode Refinement
+   ========================================================================== */
+
+body[data-theme="light"] .acb-view-segmented {
+  background: #f1f3f5;
+  border-color: #e5e7eb;
+}
+
+body[data-theme="light"] .acb-segmented-item {
+  color: #4b5563;
+}
+
+body[data-theme="light"] .acb-segmented-item:hover {
+  color: #111827;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body[data-theme="light"] .acb-segmented-item.active {
+  color: #111827;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+}
+
+body[data-theme="light"] .thread-participants-roster {
+  background: #f1f3f5;
+  border-color: #e5e7eb;
+  color: #4b5563;
+}
+
+body[data-theme="light"] .thread-participants-roster:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+body[data-theme="light"] .acb-dropdown-menu {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+body[data-theme="light"] .acb-dropdown-item {
+  color: #1f2937;
+}
+
+body[data-theme="light"] .acb-dropdown-item:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+body[data-theme="light"].view-mode-split #workspace-stage #acb-3d-arena {
+  border-right-color: #e5e7eb !important;
+}
+
+body[data-theme="light"].view-mode-split #workspace-stage #acb-3d-arena {
+  border-bottom-color: #e5e7eb !important;
+}
+
+body[data-theme="light"] .thread-header__admin-badge {
+  background: #f1f3f5;
+  color: #4b5563;
+  border-color: #e5e7eb;
+}
+
+
+/* ====================================================================================
+   BUG-02 fix: Header Action Icon Buttons (appearance: none, crisp borders, 32/36px)
+==================================================================================== */
+.header-icon-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-card, #161922);
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius, 6px);
+  color: var(--text-2, #cbd5e1);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.header-icon-btn:hover {
+  background: var(--bg-hover, #1d212d);
+  color: var(--text-1, #f8fafc);
+  border-color: var(--border, rgba(255, 255, 255, 0.22));
+}
+
+.header-icon-btn:focus-visible {
+  border-color: var(--accent, #6366f1);
+  box-shadow: 0 0 0 2px var(--accent-glow, rgba(99, 102, 241, 0.22));
+}
+
+body[data-theme="light"] .header-icon-btn {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  color: #4b5563;
+}
+
+body[data-theme="light"] .header-icon-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+  border-color: #d1d5db;
 }

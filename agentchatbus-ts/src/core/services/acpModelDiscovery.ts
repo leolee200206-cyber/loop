@@ -10,7 +10,8 @@
  * or hardcode model lists — it asks the agent directly via ACP.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import spawn from "cross-spawn";
 import { Writable, Readable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 import { logError, logInfo } from "../../shared/logger.js";

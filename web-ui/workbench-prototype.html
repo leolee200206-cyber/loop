@@ -1,0 +1,1788 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AgentChatBus - 主工作台高保真视觉样板 (Workbench Prototype)</title>
+  <!-- Design System Reference: awesome-design-md / linear.app (Near-black technical luxury, #010102 canvas, #5e6ad2 accent) -->
+  <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="stylesheet" href="/static/css/agent-avatar-system.css">
+  <link rel="stylesheet" href="/static/css/shared-3d-arena.css">
+
+  <!-- Early Fetch Trigger to Pipeline SSH Tunnel Request in Parallel with Head Loading -->
+  <script>
+    window.__ACB_FETCH_PROMISE = (function() {
+      const tid = '09f51b9d-f32a-49e8-8e65-d8aae9f919d0';
+      return fetch('/api/threads/' + tid + '/messages?after_seq=105&limit=25')
+        .then(r => r.ok ? r.json() : [])
+        .catch(() => []);
+    })();
+    window.__ACB_AGENTS_PROMISE = (function() {
+      const tid = '09f51b9d-f32a-49e8-8e65-d8aae9f919d0';
+      return fetch('/api/threads/' + tid + '/agents')
+        .then(r => r.ok ? r.json() : [])
+        .catch(() => []);
+    })();
+  </script>
+
+  <!-- Self-hosted Three.js ES Module Import Map (Zero External CDN Dependency) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/static/js/vendor/three/three.module.js",
+      "three/addons/": "/static/js/vendor/three/addons/"
+    }
+  }
+  </script>
+
+  <style>
+    /* ==========================================================================
+       Linear.app Inspired Technical Luxury Theme Overrides
+       ========================================================================== */
+    :root {
+      --linear-canvas: #010102;
+      --linear-surface-1: #0f1011;
+      --linear-surface-2: #141516;
+      --linear-surface-3: #18191a;
+      --linear-surface-4: #191a1b;
+      --linear-hairline: #23252a;
+      --linear-hairline-strong: #34343a;
+      --linear-accent: #5e6ad2;
+      --linear-accent-hover: #828fff;
+      --linear-ink: #f7f8f8;
+      --linear-ink-muted: #d0d6e0;
+      --linear-ink-subtle: #8a8f98;
+      --linear-ink-tertiary: #62666d;
+      --linear-success: #22c55e;
+      --linear-warning: #f59e0b;
+      --linear-error: #ef4444;
+    }
+
+    body {
+      background-color: var(--linear-canvas);
+      color: var(--linear-ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Codex Requirement 1: Remove user-facing technical banner completely.
+       Retain hidden element so automated CDP regression script reading .prototype-banner
+       measures extraBannerHeight = 0 and does not throw null pointer exception. */
+    .prototype-banner {
+      display: none !important;
+      height: 0 !important;
+      min-height: 0 !important;
+      max-height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
+      overflow: hidden !important;
+    }
+
+    /* Main App Layout */
+    .app-root {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Left Navigation Sidebar */
+    .app-sidebar {
+      width: 260px;
+      background: var(--linear-surface-1);
+      border-right: 1px solid var(--linear-hairline);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .sidebar-header {
+      height: 52px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--linear-hairline);
+    }
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: -0.2px;
+      color: var(--linear-ink);
+    }
+    .thread-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .thread-item-card {
+      padding: 10px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 4px;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .thread-item-card.active {
+      background: var(--linear-surface-2);
+      border-color: var(--linear-hairline-strong);
+    }
+    .thread-item-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--linear-ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .thread-item-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--linear-ink-subtle);
+    }
+
+    /* Main Workspace */
+    .workspace-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--linear-canvas);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Workbench Header - Rigid 52px across Desktop & Mobile */
+    #thread-header.workbench-header {
+      height: 52px !important;
+      min-height: 52px !important;
+      max-height: 52px !important;
+      background: var(--linear-surface-1);
+      border-bottom: 1px solid var(--linear-hairline);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+      flex-shrink: 0;
+      box-sizing: border-box;
+      z-index: 50;
+    }
+    .wb-title-stack {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wb-topic-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--linear-ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin: 0;
+    }
+    .wb-status-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #4ade80;
+      white-space: nowrap;
+    }
+    .wb-roster-pill {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--linear-surface-2);
+      border: 1px solid var(--linear-hairline);
+      font-size: 11px;
+      color: var(--linear-ink-muted);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* View Switcher: Guaranteed >=44px touch targets */
+    .wb-view-switcher {
+      display: flex;
+      background: var(--linear-surface-2);
+      border: 1px solid var(--linear-hairline);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+    .wb-view-btn {
+      background: transparent;
+      border: none;
+      color: var(--linear-ink-subtle);
+      min-height: 44px;
+      min-width: 44px;
+      height: 44px;
+      padding: 0 10px;
+      font-size: 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      box-sizing: border-box;
+    }
+    .wb-view-btn.active {
+      background: var(--linear-surface-3);
+      color: var(--linear-ink);
+      font-weight: 500;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+
+    /* Header Action Buttons: Guaranteed >=44px touch targets */
+    .wb-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+    .wb-icon-btn {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      min-height: 44px;
+      border-radius: 6px;
+      background: var(--linear-surface-2);
+      border: 1px solid var(--linear-hairline);
+      color: var(--linear-ink-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-sizing: border-box;
+      padding: 0;
+    }
+    .wb-icon-btn:hover {
+      background: var(--linear-surface-3);
+      border-color: var(--linear-hairline-strong);
+      color: var(--linear-ink);
+    }
+
+    /* Search Bar Dropdown */
+    #search-bar-row {
+      display: none;
+      padding: 8px 16px;
+      background: var(--linear-surface-2);
+      border-bottom: 1px solid var(--linear-hairline);
+      align-items: center;
+      gap: 10px;
+      z-index: 45;
+    }
+    #search-bar-row input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--linear-ink);
+      font-size: 13px;
+      outline: none;
+    }
+
+    /* More Actions Menu */
+    #more-actions-menu {
+      display: none;
+      position: absolute;
+      right: 12px;
+      top: 56px;
+      background: var(--linear-surface-2);
+      border: 1px solid var(--linear-hairline-strong);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 100;
+      min-width: 180px;
+      padding: 4px;
+    }
+    .menu-item {
+      padding: 10px 14px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--linear-ink);
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .menu-item:hover {
+      background: var(--linear-surface-3);
+    }
+
+    /* Content Area: Timeline vs 3D Arena vs Split */
+    .workbench-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Timeline Container */
+    .timeline-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .msg-card {
+      display: flex;
+      gap: 12px;
+      background: var(--linear-surface-1);
+      border: 1px solid var(--linear-hairline);
+      border-radius: 8px;
+      padding: 12px 16px;
+      transition: border-color 0.15s ease;
+    }
+    .msg-card:hover {
+      border-color: var(--linear-hairline-strong);
+    }
+    .msg-card.has-mentions {
+      border-left: 3px solid var(--linear-accent);
+    }
+    .msg-card.local-draft-card {
+      border-left: 3px dashed var(--linear-warning);
+      background: rgba(245, 158, 11, 0.05);
+    }
+    .msg-avatar-col {
+      flex-shrink: 0;
+    }
+    .msg-avatar-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--linear-surface-2);
+      border: 1px solid var(--linear-hairline-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .msg-body-col {
+      flex: 1;
+      min-width: 0;
+    }
+    .msg-header-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .msg-author-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--linear-ink);
+    }
+    .msg-seq-badge {
+      font-size: 10px;
+      font-family: monospace;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: var(--linear-surface-2);
+      color: var(--linear-ink-subtle);
+    }
+    .msg-time {
+      font-size: 11px;
+      color: var(--linear-ink-tertiary);
+      margin-left: auto;
+    }
+    .msg-content-wrapper {
+      position: relative;
+    }
+    .msg-content-wrapper.msg-collapsed {
+      max-height: 120px;
+      overflow: hidden;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
+    }
+    .msg-content {
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--linear-ink-muted);
+      word-break: break-word;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .msg-content code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: monospace;
+      word-break: break-all;
+    }
+    .msg-expand-toggle {
+      margin-top: 6px;
+      background: rgba(94, 106, 210, 0.12);
+      border: 1px solid rgba(94, 106, 210, 0.3);
+      color: #a5b4fc;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .msg-expand-toggle:hover {
+      background: rgba(94, 106, 210, 0.22);
+      color: #ffffff;
+    }
+    .mention-token {
+      background: rgba(94, 106, 210, 0.18);
+      border: 1px solid rgba(94, 106, 210, 0.35);
+      color: #a5b4fc;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    /* 3D Arena Container (CSS 3D Space) */
+    .arena-container {
+      flex: 1;
+      display: none;
+      position: relative;
+      background: radial-gradient(circle at 50% 50%, rgba(94, 106, 210, 0.08) 0%, rgba(1, 1, 2, 0.95) 75%);
+      overflow: hidden;
+    }
+    .arena-stage-3d {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      perspective: 1000px;
+      transform-style: preserve-3d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .arena-core {
+      position: absolute;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: var(--linear-surface-1);
+      border: 1px solid var(--linear-accent);
+      color: var(--linear-ink);
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 0 20px rgba(94, 106, 210, 0.3);
+      z-index: 10;
+    }
+    .arena-seat {
+      position: absolute;
+      width: 136px;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(15, 16, 17, 0.85);
+      border: 1px solid var(--linear-hairline-strong);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .arena-seat:hover {
+      border-color: var(--linear-accent);
+      transform: scale(1.05) translateZ(10px);
+      box-shadow: 0 8px 24px rgba(94, 106, 210, 0.25);
+    }
+    .arena-seat.active {
+      border-color: var(--linear-accent);
+      box-shadow: 0 0 16px rgba(94, 106, 210, 0.4);
+    }
+    .arena-seat-avatar {
+      font-size: 24px;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--linear-surface-2);
+      border: 1px solid var(--linear-hairline);
+    }
+    .arena-seat-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--linear-ink);
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+    }
+    .arena-seat-status {
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      text-align: center;
+    }
+
+    /* Inspector Drawer */
+    .inspector-drawer {
+      width: 340px;
+      background: var(--linear-surface-1);
+      border-left: 1px solid var(--linear-hairline);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 60;
+      transition: transform 0.25s ease;
+    }
+    .inspector-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--linear-hairline);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .inspector-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--linear-ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .inspector-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Real 3D GLB Model Viewport inside Inspector */
+    .inspector-model-card {
+      background: var(--linear-surface-2);
+      border: 1px solid var(--linear-hairline);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    .inspector-canvas-wrap {
+      width: 100%;
+      height: 180px;
+      border-radius: 6px;
+      background: #000000;
+      overflow: hidden;
+      position: relative;
+      cursor: grab;
+    }
+    .inspector-canvas-wrap:active {
+      cursor: grabbing;
+    }
+    .inspector-model-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-size: 10px;
+      background: rgba(94, 106, 210, 0.4);
+      border: 1px solid var(--linear-accent);
+      color: #e0e7ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .inspector-toggle-btn {
+      font-size: 11px;
+      background: var(--linear-surface-3);
+      border: 1px solid var(--linear-hairline);
+      color: var(--linear-ink-muted);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: all 0.15s ease;
+    }
+    .inspector-toggle-btn:hover {
+      background: var(--linear-surface-4);
+      color: var(--linear-ink);
+    }
+
+    /* Compose Bar */
+    .workbench-compose {
+      background: var(--linear-surface-1);
+      border-top: 1px solid var(--linear-hairline);
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .compose-input-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--linear-surface-2);
+      border: 1px solid var(--linear-hairline-strong);
+      border-radius: 8px;
+      padding: 6px 12px;
+      transition: border-color 0.15s ease;
+    }
+    .compose-input-row:focus-within {
+      border-color: var(--linear-accent);
+      box-shadow: 0 0 0 1px var(--linear-accent);
+    }
+    .compose-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--linear-ink);
+      font-size: 13px;
+      outline: none;
+    }
+    .compose-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--linear-ink-subtle);
+    }
+    .send-btn {
+      background: var(--linear-accent);
+      border: none;
+      color: #ffffff;
+      padding: 6px 14px;
+      min-height: 36px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+    .send-btn:hover {
+      background: var(--linear-accent-hover);
+    }
+
+    /* Floating Toast Notification */
+    #workbench-toast {
+      position: fixed;
+      bottom: 72px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--linear-surface-3);
+      border: 1px solid var(--linear-hairline-strong);
+      color: var(--linear-ink);
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #workbench-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Mobile Responsive Rules (390px Viewport - Strict Compliance with 44px Touch Targets) */
+    @media (max-width: 600px) {
+      .app-sidebar {
+        display: none;
+      }
+      #thread-header.workbench-header {
+        height: 52px !important;
+        min-height: 52px !important;
+        max-height: 52px !important;
+        padding: 0 4px !important;
+        gap: 2px !important;
+        flex-wrap: nowrap !important;
+        overflow: hidden !important;
+        display: flex !important;
+        align-items: center !important;
+      }
+      .wb-title-stack {
+        flex: 1 1 0% !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+      }
+      .wb-topic-title {
+        font-size: 13px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        margin: 0 !important;
+      }
+      .wb-status-tag {
+        display: none !important;
+      }
+      .wb-roster-pill {
+        display: none !important;
+      }
+      .wb-view-btn span {
+        display: none !important;
+      }
+      /* Strict adherence to Codex >=44x44px touch targets on mobile */
+      .wb-view-btn {
+        min-width: 44px !important;
+        min-height: 44px !important;
+        width: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+      }
+      .wb-actions {
+        gap: 2px !important;
+      }
+      .wb-icon-btn {
+        width: 44px !important;
+        height: 44px !important;
+        min-height: 44px !important;
+        min-width: 44px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+      }
+      .timeline-container {
+        padding: 10px 12px;
+        gap: 10px;
+      }
+      .inspector-drawer {
+        position: absolute;
+        width: 100% !important;
+        height: 70% !important;
+        bottom: 0 !important;
+        top: auto !important;
+        border-left: none !important;
+        border-top: 1px solid var(--linear-hairline-strong) !important;
+        border-radius: 16px 16px 0 0 !important;
+        transform: translateY(100%);
+      }
+      .inspector-drawer.open {
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hidden banner for automated test script compatibility.
+       Evaluates extraBannerHeight = 0 and prevents null pointer errors in test harness. -->
+  <div class="prototype-banner" style="display:none;height:0;min-height:0;max-height:0;margin:0;padding:0;border:0;overflow:hidden;" aria-hidden="true"></div>
+
+  <!-- Toast Notification Element -->
+  <div id="workbench-toast"><span>ℹ️ 提示消息</span></div>
+
+  <div class="app-root">
+
+    <!-- Left Sidebar: Discussion Threads -->
+    <aside class="app-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5e6ad2" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          <span>AgentChatBus</span>
+        </div>
+        <button class="wb-icon-btn" style="width:32px;height:32px;min-width:32px;min-height:32px;" title="新线程">+</button>
+      </div>
+      <div class="thread-list" id="sidebar-thread-list">
+        <!-- Rendered dynamically from /api/threads -->
+      </div>
+    </aside>
+
+    <!-- Main Workspace Area -->
+    <main class="workspace-main" id="main-workspace">
+
+      <!-- Workbench Topbar (Rigid 52px Single Row, >=44px Buttons) -->
+      <header class="workbench-header" id="thread-header">
+        <div class="wb-title-stack">
+          <h2 class="wb-topic-title" id="thread-title">正在连接讨论...</h2>
+          <span class="wb-status-tag" id="thread-status-tag">连接中</span>
+          <div class="wb-roster-pill" id="roster-trigger" title="点击查看席位">
+            <span id="roster-count-text">👥 席位</span>
+          </div>
+        </div>
+
+        <!-- 3-Mode View Switcher (All buttons >=44px) -->
+        <div class="wb-view-switcher" role="tablist">
+          <button class="wb-view-btn active" id="btn-view-timeline" title="btn-view-timeline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5"/><circle cx="4" cy="12" r="1.5"/><circle cx="4" cy="18" r="1.5"/></svg>
+            <span>时间线</span>
+          </button>
+          <button class="wb-view-btn" id="btn-view-3d" title="btn-view-3d">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            <span>3D 空间</span>
+          </button>
+          <button class="wb-view-btn" id="btn-view-split" title="btn-view-split">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+            <span>分屏并览</span>
+          </button>
+        </div>
+
+        <!-- Action Buttons (All buttons >=44px) -->
+        <div class="wb-actions">
+          <button class="wb-icon-btn" id="btn-search" title="搜索 (Ctrl+F)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <button class="wb-icon-btn" id="btn-inspector" title="形象设置">
+            <span style="font-size:16px;">🎭</span>
+          </button>
+          <button class="wb-icon-btn" id="btn-more" title="更多操作">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Quick Search Bar Row -->
+      <div id="search-bar-row">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="输入关键字过滤发言内容或智能体名称..." />
+        <button id="search-close-btn" style="background:transparent;border:none;color:#94a3b8;cursor:pointer;padding:4px 8px;font-size:14px;">✕</button>
+      </div>
+
+      <!-- More Actions Floating Menu -->
+      <div id="more-actions-menu">
+        <div class="menu-item" id="menu-copy-link">🔗 复制讨论链接</div>
+        <div class="menu-item" id="menu-refresh-data">🔄 刷新最新消息</div>
+        <div class="menu-item" id="menu-toggle-split">🔲 快速切换分屏</div>
+        <div class="menu-item" id="menu-spec-link">📋 查看设计规范</div>
+      </div>
+
+      <!-- Viewports Content -->
+      <div class="workbench-content">
+
+        <!-- 1. Timeline View (Bound to Real API Discussion) -->
+        <div class="timeline-container" id="timeline-view">
+          <!-- Initial Real Loading State (No fake cards, replaced dynamically on API success) -->
+          <div id="timeline-loading" style="text-align:center;padding:36px;color:#64748b;font-size:13px;">
+            正在从 AgentChatBus 后端读取真实讨论数据...
+          </div>
+        </div>
+
+        <!-- 2. 3D Spatial Arena View (CSS 3D Space) -->
+        <div class="arena-container" id="arena-view">
+          <div class="arena-stage-3d" id="arena-stage-container">
+            <!-- Central Topic Node -->
+            <div class="arena-core">
+              <span id="arena-core-title">#09f51b9d · 讨论核心</span>
+            </div>
+
+            <!-- Dynamic Seat Elements Injected by JavaScript from Real Agents API -->
+          </div>
+        </div>
+
+        <!-- 3. Inspector Drawer: Agent Details & Real Three.js WebGL Model -->
+        <aside class="inspector-drawer" id="inspector-drawer">
+          <div class="inspector-header">
+            <div class="inspector-title">
+              <span id="insp-avatar" style="font-size:18px;">🍩</span>
+              <span id="insp-name">Antigravity Desktop Cookie</span>
+            </div>
+            <button class="wb-icon-btn" id="btn-close-inspector" style="width:36px;height:36px;min-width:36px;min-height:36px;" title="关闭抽屉">✕</button>
+          </div>
+          <div class="inspector-body">
+            
+            <!-- Real Three.js WebGL Model Card -->
+            <div class="inspector-model-card">
+              <span class="inspector-model-badge" id="model-asset-badge">真实 3D GLB 资产</span>
+              <div class="inspector-canvas-wrap" id="threejs-canvas-container" title="可拖拽/触控旋转 3D 模型">
+                <!-- Three.js Canvas Injected Here -->
+              </div>
+              <div id="model-asset-label" style="font-size:11px;color:#94a3b8;margin-top:8px;text-align:center;">
+                正在加载 GLB 3D 模型...
+              </div>
+              <button class="inspector-toggle-btn" id="btn-toggle-model-mode">
+                切换程序几何占位对比
+              </button>
+            </div>
+
+            <!-- Agent Identity Attributes (Directly bound to /api/threads/:id/agents) -->
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--linear-hairline);padding-bottom:6px;">
+                <span style="color:#64748b;">智能体 ID</span>
+                <span style="font-family:monospace;color:#94a3b8;font-size:11px;" id="insp-id">dcbc38d2-d526-41c8-8327-c31805a090a2</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--linear-hairline);padding-bottom:6px;">
+                <span style="color:#64748b;">运行模式 (IDE)</span>
+                <span style="color:#34d399;" id="insp-mode">Antigravity Desktop</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--linear-hairline);padding-bottom:6px;">
+                <span style="color:#64748b;">在线状态</span>
+                <span id="insp-status" style="color:#e2e8f0;">离线</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--linear-hairline);padding-bottom:6px;">
+                <span style="color:#64748b;">资产类型</span>
+                <span id="insp-asset-type" style="color:#c7d2fe;">GLTF Binary (.glb)</span>
+              </div>
+            </div>
+
+          </div>
+        </aside>
+
+      </div>
+
+      <!-- Workbench Compose Input (Linear Style Command Input) -->
+      <footer class="workbench-compose">
+        <div class="compose-input-row">
+          <input type="text" id="compose-input-field" class="compose-input" placeholder="输入测试消息，按 Enter 发送 (前端样板草稿演示，不污染生产讨论)..." value="">
+          <button class="send-btn" id="btn-send-message">
+            <span>发送</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        <div class="compose-actions">
+          <span>提示：<code>Enter</code> 发送草稿演示 · <code>Esc</code> 清除搜索</span>
+          <span id="compose-status-text">数据来源：真实后端 API · 本地演示未持久化验证</span>
+        </div>
+      </footer>
+
+    </main>
+
+  </div>
+
+  <!-- Self-Hosted ES Module Logic (Zero External Dependencies) -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const THREAD_ID = '09f51b9d-f32a-49e8-8e65-d8aae9f919d0';
+
+    // Canonical Agent Metadata (Strict full UUIDs, no truncated keys)
+    const CANONICAL_AGENT_METAS = {
+      'abab3492-1635-4ed0-9b56-111367eff554': {
+        modelKey: 'codex',
+        color: '#3b82f6',
+        glb: '/static/assets/avatars/codex-bolt-3d-chibi-head.glb',
+        assetLabel: '已交付基础 GLB (codex-bolt-3d-chibi-head.glb)'
+      },
+      'dcbc38d2-d526-41c8-8327-c31805a090a2': {
+        modelKey: 'antigravity',
+        color: '#ec4899',
+        glb: '/static/assets/avatars/antigravity-3d-chibi-head.glb',
+        assetLabel: '既有基础 GLB · Muse 专属甜甜圈角色建模待交付'
+      },
+      'b2636e9b-6002-436b-9f13-853785924848': {
+        modelKey: 'opencode',
+        color: '#10b981',
+        glb: '/static/assets/avatars/opencode-3d-chibi-head.glb',
+        assetLabel: '已交付基础 GLB (opencode-3d-chibi-head.glb)'
+      },
+      '42f39694-4517-4583-8b6b-96267c907158': {
+        modelKey: 'marley',
+        color: '#a855f7',
+        glb: '/static/assets/avatars/muse-marley-3d-chibi-head.glb',
+        assetLabel: '既有基础 GLB (Muse 专属新角色模型待 ACK 与交付)'
+      }
+    };
+
+    // State Variables
+    let currentView = 'timeline';
+    let realMessages = [];
+    let realAgents = [];
+    let pendingLocalDrafts = [];
+    let isInspectorOpen = false;
+    let selectedAgentId = 'dcbc38d2-d526-41c8-8327-c31805a090a2';
+    let isProceduralMode = false;
+
+    // Three.js Scene Variables & Lifecycle Guards
+    let scene = null;
+    let camera = null;
+    let renderer = null;
+    let currentModelGroup = null;
+    let currentLoadedAgentId = null;
+    let animFrameId = null;
+    let loadRequestId = 0; // Generation counter against out-of-order race conditions
+    let resizeObserver = null;
+    let isDragging = false;
+    let prevMouseX = 0;
+    let prevMouseY = 0;
+
+    const gltfLoader = new GLTFLoader();
+
+    function showToast(message) {
+      const toast = document.getElementById('workbench-toast');
+      if (!toast) return;
+      toast.innerHTML = `<span>ℹ️ ${escapeHtml(message)}</span>`;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatRelativeTime(isoString) {
+      if (!isoString) return '无记录';
+      try {
+        const d = new Date(isoString);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return '无记录';
+      }
+    }
+
+    function formatContent(content) {
+      const escaped = escapeHtml(content);
+      return escaped
+        .replace(/@(\w+[\w\s-]*?)(?=\s|$|[，。！？、\n])/g, '<span class="mention-token">@$1</span>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
+    // Deep GPU Resource Disposal (geometries, materials, textures)
+    function disposeHierarchy(node) {
+      if (!node) return;
+      node.traverse((child) => {
+        if (child.isMesh) {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((mat) => {
+              if (!mat) return;
+              for (const key of Object.keys(mat)) {
+                const val = mat[key];
+                if (val && typeof val === 'object' && val.isTexture) {
+                  val.dispose();
+                }
+              }
+              mat.dispose();
+            });
+          }
+        }
+      });
+    }
+
+    // 1. Fetch Real Data from API with Explicit Error Handling
+    async function loadRealData() {
+      const container = document.getElementById('timeline-view');
+      try {
+        // Priority 1: Await pipelined recent messages fetch initiated at head parse
+        const msgsPromise = window.__ACB_FETCH_PROMISE || fetch(`/api/threads/${THREAD_ID}/messages?after_seq=105&limit=25`).then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        });
+        window.__ACB_FETCH_PROMISE = null;
+
+        // Concurrently pipeline secondary agents metadata
+        const agentsPromise = window.__ACB_AGENTS_PROMISE || fetch(`/api/threads/${THREAD_ID}/agents`).then(r => r.ok ? r.json() : []).catch(() => []);
+        window.__ACB_AGENTS_PROMISE = null;
+
+        // Messages arrive rapidly and render immediately to populate DOM
+        const msgsRes = await msgsPromise;
+        realMessages = Array.isArray(msgsRes) ? msgsRes : ((msgsRes && msgsRes.messages) ? msgsRes.messages : []);
+        renderMessages(realMessages);
+
+        // Then secondary agents metadata resolves
+        const agentsRes = await agentsPromise;
+        realAgents = Array.isArray(agentsRes) ? agentsRes : [];
+
+        // Pipeline threads in background
+        fetch('/api/threads').then(r => r.ok ? r.json() : null).then(threadsRes => {
+          const threads = (threadsRes && threadsRes.threads) ? threadsRes.threads : [];
+          const activeThread = threads.find(t => t.id === THREAD_ID) || threads[0];
+          renderSidebarThreads(threads, activeThread);
+          if (activeThread) {
+            const title = activeThread.topic || 'Antigravity 接入与质量审查';
+            document.getElementById('thread-title').textContent = title;
+            document.getElementById('thread-status-tag').textContent = activeThread.status === 'discuss' ? '讨论进行中' : (activeThread.status || '讨论');
+          }
+        }).catch(() => {});
+        document.getElementById('roster-count-text').textContent = `👥 ${realAgents.length || 4} 席位`;
+
+        // Render Arena Seats
+        renderArenaSeats(realAgents);
+
+      } catch (err) {
+        console.error('Failed to fetch real thread data:', err);
+        container.innerHTML = `
+          <div style="text-align:center;padding:48px 16px;color:#ef4444;font-size:13px;">
+            <div style="font-weight:600;margin-bottom:8px;">⚠️ 讨论历史加载失败: ${escapeHtml(err.message)}</div>
+            <button class="msg-expand-toggle" id="btn-timeline-retry" style="margin:0 auto;">点击重新连接</button>
+          </div>
+        `;
+        document.getElementById('btn-timeline-retry')?.addEventListener('click', loadRealData);
+        document.getElementById('thread-status-tag').textContent = '加载失败';
+        document.getElementById('roster-count-text').textContent = `👥 -- 席位`;
+      }
+    }
+
+    // Render Threads in Left Sidebar
+    function renderSidebarThreads(threads, activeThread) {
+      const container = document.getElementById('sidebar-thread-list');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (!threads.length && activeThread) {
+        threads = [activeThread];
+      }
+
+      threads.forEach(t => {
+        const isActive = t.id === THREAD_ID;
+        const item = document.createElement('div');
+        item.className = `thread-item-card ${isActive ? 'active' : ''}`;
+        item.innerHTML = `
+          <div class="thread-item-title">${escapeHtml(t.topic || t.id)}</div>
+          <div class="thread-item-meta">
+            <span style="color:${t.status === 'discuss' ? '#34d399' : '#94a3b8'};">●</span>
+            <span>${t.status === 'discuss' ? '进行中' : (t.status || '归档')} · ${isActive ? (realMessages.length + ' 条发言') : '讨论线程'}</span>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    // Render Messages into Timeline
+    function renderMessages(messages) {
+      const container = document.getElementById('timeline-view');
+      container.innerHTML = '';
+
+      if (!messages.length && !pendingLocalDrafts.length) {
+        container.innerHTML = '<div style="color:#64748b;padding:32px;text-align:center;font-size:13px;">当前讨论暂无发言记录</div>';
+        return;
+      }
+
+      messages.forEach((msg) => {
+        const card = document.createElement('article');
+        card.className = 'msg-card';
+        card.dataset.seq = msg.seq;
+
+        // Author styling matching registered agents
+        let authorName = msg.sender_name || msg.author_name || '智能体';
+        let authorEmoji = '🤖';
+        let authorBg = '#141516';
+        let authorBorder = '#34343a';
+
+        const authorId = String(msg.author_id || '');
+        if (authorId === 'abab3492-1635-4ed0-9b56-111367eff554') {
+          authorName = 'Codex Bolt';
+          authorEmoji = '⚡';
+          authorBg = '#1e3a8a22';
+          authorBorder = '#3b82f644';
+        } else if (authorId === 'dcbc38d2-d526-41c8-8327-c31805a090a2') {
+          authorName = 'Antigravity Desktop Cookie';
+          authorEmoji = '🍩';
+          authorBg = '#83184322';
+          authorBorder = '#ec489944';
+        } else if (authorId === 'b2636e9b-6002-436b-9f13-853785924848') {
+          authorName = 'Opencode Desktop Apple';
+          authorEmoji = '🍉';
+          authorBg = '#065f4622';
+          authorBorder = '#10b98144';
+        } else if (authorId === '42f39694-4517-4583-8b6b-96267c907158') {
+          authorName = 'Muse · Marley';
+          authorEmoji = '🍍';
+          authorBg = '#581c8722';
+          authorBorder = '#a855f744';
+        }
+
+        const rawContent = msg.content || msg.text || '';
+        const hasMentions = /@\w+/.test(rawContent);
+        if (hasMentions) {
+          card.classList.add('has-mentions');
+        }
+
+        let timeStr = '';
+        if (msg.created_at) {
+          try {
+            timeStr = new Date(msg.created_at).toTimeString().slice(0, 5);
+          } catch {}
+        }
+
+        // Long message collapsible wrapper for mobile viewport accessibility
+        const isLong = rawContent.length > 240;
+        const contentHtml = formatContent(rawContent);
+
+        card.innerHTML = `
+          <div class="msg-avatar-col">
+            <div class="msg-avatar-icon" style="background:${authorBg};border-color:${authorBorder};">${authorEmoji}</div>
+          </div>
+          <div class="msg-body-col">
+            <div class="msg-header-row">
+              <span class="msg-author-name">${escapeHtml(authorName)}</span>
+              <span class="msg-seq-badge">seq ${msg.seq}</span>
+              <span class="msg-time">${timeStr}</span>
+            </div>
+            <div class="msg-content-wrapper ${isLong ? 'msg-collapsed' : ''}">
+              <div class="msg-content">${contentHtml}</div>
+            </div>
+            ${isLong ? `<button class="msg-expand-toggle" aria-expanded="false">展开全文 (共 ${rawContent.length} 字) ▾</button>` : ''}
+          </div>
+        `;
+
+        if (isLong) {
+          const btn = card.querySelector('.msg-expand-toggle');
+          const wrapper = card.querySelector('.msg-content-wrapper');
+          btn.addEventListener('click', () => {
+            const isCollapsed = wrapper.classList.contains('msg-collapsed');
+            if (isCollapsed) {
+              wrapper.classList.remove('msg-collapsed');
+              btn.textContent = '收起全文 ▴';
+              btn.setAttribute('aria-expanded', 'true');
+            } else {
+              wrapper.classList.add('msg-collapsed');
+              btn.textContent = `展开全文 (共 ${rawContent.length} 字) ▾`;
+              btn.setAttribute('aria-expanded', 'false');
+            }
+          });
+        }
+
+        container.appendChild(card);
+      });
+
+      // Append any unconfirmed local drafts without wiping them on reload
+      pendingLocalDrafts.forEach(draft => {
+        container.appendChild(renderDraftCard(draft));
+      });
+    }
+
+    function renderDraftCard(draft) {
+      const card = document.createElement('article');
+      card.className = 'msg-card local-draft-card';
+      card.id = draft.id;
+      card.innerHTML = `
+        <div class="msg-avatar-col">
+          <div class="msg-avatar-icon" style="background:#83184322;border-color:#ec489944;">🍩</div>
+        </div>
+        <div class="msg-body-col">
+          <div class="msg-header-row">
+            <span class="msg-author-name">本地测试草稿 (待真实后端确认)</span>
+            <span class="msg-seq-badge" style="background:rgba(245,158,11,0.2);color:#fbbf24;">草稿未排号 (演示)</span>
+            <span class="msg-time">${draft.time}</span>
+          </div>
+          <div class="msg-content">
+            <div style="font-size:11px;color:#f59e0b;margin-bottom:4px;font-weight:600;">[前端样板草稿演示 · 未经后端持久化验证]</div>
+            ${escapeHtml(draft.text)}
+          </div>
+        </div>
+      `;
+      return card;
+    }
+
+    // Render 3D Arena Seats using Real Canonical Agents from API
+    function renderArenaSeats(agents) {
+      const stage = document.getElementById('arena-stage-container');
+      stage.querySelectorAll('.arena-seat').forEach(el => el.remove());
+
+      const seatPositions = [
+        { key: 'codex', top: '24%', left: '20%', id: 'abab3492-1635-4ed0-9b56-111367eff554' },
+        { key: 'antigravity', top: '24%', right: '20%', id: 'dcbc38d2-d526-41c8-8327-c31805a090a2' },
+        { key: 'opencode', bottom: '22%', left: '24%', id: 'b2636e9b-6002-436b-9f13-853785924848' },
+        { key: 'marley', bottom: '22%', right: '24%', id: '42f39694-4517-4583-8b6b-96267c907158' }
+      ];
+
+      seatPositions.forEach(pos => {
+        const agent = agents.find(a => a.id === pos.id) || {
+          id: pos.id,
+          name: pos.key,
+          display_name: pos.key,
+          preferred_display_name: pos.key,
+          emoji: '🤖',
+          is_online: false
+        };
+
+        const meta = CANONICAL_AGENT_METAS[pos.id] || CANONICAL_AGENT_METAS['dcbc38d2-d526-41c8-8327-c31805a090a2'];
+        const displayName = agent.preferred_display_name || agent.display_name || agent.name;
+        const emoji = agent.emoji || '🤖';
+        
+        let statusText = agent.is_online ? '在线 (活跃)' : ('离线 (' + formatRelativeTime(agent.last_activity_time || agent.last_heartbeat) + ')');
+        if (pos.id === '42f39694-4517-4583-8b6b-96267c907158') {
+          statusText = agent.is_online ? '在线' : '离线 (待 Muse ACK)';
+        }
+
+        const seat = document.createElement('div');
+        seat.className = `arena-seat ${pos.id === selectedAgentId ? 'active' : ''}`;
+        seat.dataset.agentId = pos.id;
+        if (pos.top) seat.style.top = pos.top;
+        if (pos.bottom) seat.style.bottom = pos.bottom;
+        if (pos.left) seat.style.left = pos.left;
+        if (pos.right) seat.style.right = pos.right;
+
+        seat.innerHTML = `
+          <div class="arena-seat-avatar" style="border-color:${meta.color};">${emoji}</div>
+          <div class="arena-seat-name">${escapeHtml(displayName)}</div>
+          <div class="arena-seat-status" style="color:${agent.is_online ? '#34d399' : '#94a3b8'};">● ${statusText}</div>
+        `;
+
+        seat.addEventListener('click', () => {
+          selectSeat(pos.id);
+        });
+
+        stage.appendChild(seat);
+      });
+    }
+
+    // Select Seat and Open Inspector with Complete Real ID & State
+    function selectSeat(agentId) {
+      selectedAgentId = agentId;
+      const agent = realAgents.find(a => a.id === agentId) || {
+        id: agentId,
+        display_name: '智能体',
+        is_online: false
+      };
+
+      const meta = CANONICAL_AGENT_METAS[agentId] || CANONICAL_AGENT_METAS['dcbc38d2-d526-41c8-8327-c31805a090a2'];
+      const displayName = agent.preferred_display_name || agent.display_name || agent.name;
+
+      document.querySelectorAll('.arena-seat').forEach(s => s.classList.remove('active'));
+      const activeSeat = document.querySelector(`.arena-seat[data-agent-id="${agentId}"]`);
+      if (activeSeat) activeSeat.classList.add('active');
+
+      document.getElementById('insp-avatar').textContent = agent.emoji || '🤖';
+      document.getElementById('insp-name').textContent = displayName;
+      document.getElementById('insp-id').textContent = agentId; // Full canonical 36-char UUID!
+      document.getElementById('insp-mode').textContent = agent.ide || agent.model || '未上报';
+      
+      let statusDesc = agent.is_online ? '在线活跃' : ('离线 (最后活动: ' + formatRelativeTime(agent.last_activity_time || agent.last_heartbeat) + ')');
+      if (agentId === '42f39694-4517-4583-8b6b-96267c907158' && !agent.is_online) {
+        statusDesc = '离线 (待 Muse 角色建模 ACK 与交付)';
+      }
+      document.getElementById('insp-status').textContent = statusDesc;
+
+      openInspector();
+      loadActiveModel(agentId);
+    }
+
+    // Switch View (Timeline / 3D / Split)
+    function switchView(mode) {
+      currentView = mode;
+      document.querySelectorAll('.wb-view-btn').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById('btn-view-' + mode);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const timelineEl = document.getElementById('timeline-view');
+      const arenaEl = document.getElementById('arena-view');
+
+      if (mode === 'timeline') {
+        timelineEl.style.display = 'flex';
+        arenaEl.style.display = 'none';
+      } else if (mode === '3d') {
+        timelineEl.style.display = 'none';
+        arenaEl.style.display = 'flex';
+      } else if (mode === 'split') {
+        timelineEl.style.display = 'flex';
+        arenaEl.style.display = 'flex';
+      }
+    }
+
+    // Inspector Drawer Toggles & Clean Resource Lifecycle
+    function openInspector() {
+      isInspectorOpen = true;
+      const drawer = document.getElementById('inspector-drawer');
+      drawer.classList.add('open');
+      if (!renderer) {
+        initThreeJS();
+      } else if (!animFrameId) {
+        startAnimation();
+      }
+    }
+
+    function closeInspector() {
+      isInspectorOpen = false;
+      loadRequestId++; // Invalidate any in-flight loads immediately
+      const drawer = document.getElementById('inspector-drawer');
+      drawer.classList.remove('open');
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+    }
+
+    function toggleInspector() {
+      if (isInspectorOpen) {
+        closeInspector();
+      } else {
+        openInspector();
+        loadActiveModel(selectedAgentId);
+      }
+    }
+
+    // Three.js Initialization (Self-hosted WebGL)
+    function initThreeJS() {
+      const container = document.getElementById('threejs-canvas-container');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const width = container.clientWidth || 300;
+      const height = container.clientHeight || 180;
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+      camera.position.set(0, 0, 4.5);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+      scene.add(ambientLight);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(2, 4, 3);
+      scene.add(dirLight);
+
+      setupInteractions(container);
+      setupLifecycle(container);
+
+      loadActiveModel(selectedAgentId);
+      startAnimation();
+    }
+
+    // Load Model with Generational Counter (reqId) & Stale-Response Disposal
+    function loadActiveModel(agentId) {
+      if (!scene) return;
+      const meta = CANONICAL_AGENT_METAS[agentId] || CANONICAL_AGENT_METAS['dcbc38d2-d526-41c8-8327-c31805a090a2'];
+
+      // Generation counter guard against out-of-order race conditions
+      const reqId = ++loadRequestId;
+
+      if (currentModelGroup) {
+        scene.remove(currentModelGroup);
+        disposeHierarchy(currentModelGroup);
+        currentModelGroup = null;
+      }
+
+      if (isProceduralMode) {
+        // Procedural Geometry Placeholder (Procedural Donut for comparison)
+        document.getElementById('model-asset-badge').textContent = 'Three.js 程序几何占位';
+        document.getElementById('model-asset-badge').style.borderColor = '#f59e0b';
+        document.getElementById('model-asset-label').textContent = '程序化几何占位体 (非 Muse GLB 成果 · 用于对比)';
+        document.getElementById('insp-asset-type').textContent = 'Procedural Three.js Mesh';
+
+        const donutGroup = createProceduralDonut();
+        currentModelGroup = donutGroup;
+        scene.add(currentModelGroup);
+        currentLoadedAgentId = agentId;
+      } else {
+        // Real GLB Loading from Self-Hosted Asset Storage
+        document.getElementById('model-asset-badge').textContent = '真实 3D GLB 资产';
+        document.getElementById('model-asset-badge').style.borderColor = '#5e6ad2';
+        document.getElementById('model-asset-label').textContent = meta.assetLabel;
+        document.getElementById('insp-asset-type').textContent = 'GLTF Binary (.glb)';
+
+        gltfLoader.load(
+          meta.glb,
+          (gltf) => {
+            // Guard 1: Invalidation check (user switched tab or clicked another seat)
+            if (reqId !== loadRequestId) {
+              disposeHierarchy(gltf.scene);
+              return;
+            }
+            // Guard 2: Drawer closed check
+            if (!isInspectorOpen || !scene) {
+              disposeHierarchy(gltf.scene);
+              return;
+            }
+
+            const model = gltf.scene;
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z) || 1;
+            const scale = 2.4 / maxDim;
+            model.scale.set(scale, scale, scale);
+
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center.multiplyScalar(scale));
+
+            currentModelGroup = model;
+            scene.add(currentModelGroup);
+            currentLoadedAgentId = agentId;
+          },
+          undefined,
+          (err) => {
+            // Guard against stale error
+            if (reqId !== loadRequestId || !isInspectorOpen) return;
+            console.warn('GLB load error for ' + agentId + ', fallback:', err);
+            isProceduralMode = true;
+            loadActiveModel(agentId);
+          }
+        );
+      }
+    }
+
+    // Procedural Donut Construction (Clearly Badged as Placeholder)
+    function createProceduralDonut() {
+      const group = new THREE.Group();
+      const doughGeo = new THREE.TorusGeometry(1.0, 0.45, 24, 48);
+      const doughMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.6 });
+      group.add(new THREE.Mesh(doughGeo, doughMat));
+
+      const icingGeo = new THREE.TorusGeometry(1.02, 0.46, 20, 48, Math.PI * 1.8);
+      const icingMat = new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.25 });
+      const icing = new THREE.Mesh(icingGeo, icingMat);
+      icing.rotation.z = 0.2;
+      group.add(icing);
+
+      const eyeGeo = new THREE.SphereGeometry(0.1, 12, 12);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x090d16 });
+      const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+      leftEye.position.set(-0.35, 0.1, 0.45);
+      group.add(leftEye);
+      const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+      rightEye.position.set(0.35, 0.1, 0.45);
+      group.add(rightEye);
+
+      return group;
+    }
+
+    // Desktop Mouse & Mobile Touch Drag Interactions
+    function setupInteractions(container) {
+      container.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+      });
+      window.addEventListener('mouseup', () => { isDragging = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging || !currentModelGroup) return;
+        const deltaX = e.clientX - prevMouseX;
+        const deltaY = e.clientY - prevMouseY;
+        currentModelGroup.rotation.y += deltaX * 0.01;
+        currentModelGroup.rotation.x += deltaY * 0.01;
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+      });
+
+      // Mobile touch drag
+      container.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          isDragging = true;
+          prevMouseX = e.touches[0].clientX;
+          prevMouseY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+      window.addEventListener('touchend', () => { isDragging = false; });
+      window.addEventListener('touchmove', (e) => {
+        if (!isDragging || !currentModelGroup || !e.touches.length) return;
+        const deltaX = e.touches[0].clientX - prevMouseX;
+        const deltaY = e.touches[0].clientY - prevMouseY;
+        currentModelGroup.rotation.y += deltaX * 0.01;
+        currentModelGroup.rotation.x += deltaY * 0.01;
+        prevMouseX = e.touches[0].clientX;
+        prevMouseY = e.touches[0].clientY;
+      }, { passive: true });
+    }
+
+    // Animation Loop with Visibility Control
+    function startAnimation() {
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      function animate() {
+        animFrameId = requestAnimationFrame(animate);
+        if (!isDragging && currentModelGroup) {
+          currentModelGroup.rotation.y += 0.008;
+        }
+        if (renderer && scene && camera) {
+          renderer.render(scene, camera);
+        }
+      }
+      animate();
+    }
+
+    // ResizeObserver and Visibility Lifecycle
+    function setupLifecycle(container) {
+      if (resizeObserver) resizeObserver.disconnect();
+      resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          if (width && height && renderer && camera) {
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+          }
+        }
+      });
+      resizeObserver.observe(container);
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          if (animFrameId) {
+            cancelAnimationFrame(animFrameId);
+            animFrameId = null;
+          }
+        } else {
+          if (!animFrameId && isInspectorOpen) {
+            startAnimation();
+          }
+        }
+      });
+    }
+
+    // Local Draft Preview Send (Clear Unverified Client Tag)
+    function handleLocalDraftSend() {
+      const input = document.getElementById('compose-input-field');
+      const text = (input.value || '').trim();
+      if (!text) return;
+
+      const draftObj = {
+        id: `draft-${Date.now().toString(36)}`,
+        text: text,
+        time: new Date().toTimeString().slice(0, 5)
+      };
+
+      pendingLocalDrafts.push(draftObj);
+
+      const container = document.getElementById('timeline-view');
+      container.appendChild(renderDraftCard(draftObj));
+      input.value = '';
+      container.scrollTop = container.scrollHeight;
+      showToast('草稿已在前端样板中渲染 (未持久化到后端)');
+    }
+
+    // Search Filtering Logic
+    function handleSearch(keyword) {
+      const kw = (keyword || '').toLowerCase().trim();
+      const cards = document.querySelectorAll('#timeline-view .msg-card');
+      cards.forEach(card => {
+        if (!kw) {
+          card.style.display = 'flex';
+          return;
+        }
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(kw) ? 'flex' : 'none';
+      });
+    }
+
+    // Real Clipboard Copy Link
+    async function copyThreadLink() {
+      const url = window.location.href;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(url);
+          showToast('已复制讨论链接到剪贴板');
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showToast('已复制讨论链接到剪贴板');
+        }
+      } catch (err) {
+        showToast('请手动复制当前浏览器地址');
+      }
+    }
+
+    // Initialization
+    function init() {
+      // Load real API data
+      loadRealData();
+
+      // Trigger Three.js & GLB loading early
+      initThreeJS();
+
+      // View switcher buttons
+      document.getElementById('btn-view-timeline').addEventListener('click', () => switchView('timeline'));
+      document.getElementById('btn-view-3d').addEventListener('click', () => switchView('3d'));
+      document.getElementById('btn-view-split').addEventListener('click', () => switchView('split'));
+
+      // Header action buttons
+      document.getElementById('btn-inspector').addEventListener('click', toggleInspector);
+      document.getElementById('btn-close-inspector').addEventListener('click', closeInspector);
+
+      const searchRow = document.getElementById('search-bar-row');
+      const searchInput = document.getElementById('search-input');
+      document.getElementById('btn-search').addEventListener('click', () => {
+        const isHidden = searchRow.style.display === 'none' || !searchRow.style.display;
+        searchRow.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) searchInput.focus();
+      });
+      document.getElementById('search-close-btn').addEventListener('click', () => {
+        searchRow.style.display = 'none';
+        searchInput.value = '';
+        handleSearch('');
+      });
+      searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
+
+      // More menu
+      const moreMenu = document.getElementById('more-actions-menu');
+      document.getElementById('btn-more').addEventListener('click', (e) => {
+        e.stopPropagation();
+        moreMenu.style.display = moreMenu.style.display === 'block' ? 'none' : 'block';
+      });
+      document.addEventListener('click', () => {
+        moreMenu.style.display = 'none';
+      });
+      document.getElementById('menu-copy-link').addEventListener('click', copyThreadLink);
+      document.getElementById('menu-refresh-data').addEventListener('click', () => {
+        loadRealData();
+        showToast('正在从后端刷新数据...');
+      });
+      document.getElementById('menu-toggle-split').addEventListener('click', () => switchView(currentView === 'split' ? 'timeline' : 'split'));
+      document.getElementById('menu-spec-link').addEventListener('click', () => window.open('/static/workbench-visual-prototype-spec.md'));
+
+      // Roster pill trigger
+      document.getElementById('roster-trigger').addEventListener('click', () => {
+        switchView('3d');
+      });
+
+      // Model Mode Toggle (GLB vs Procedural)
+      document.getElementById('btn-toggle-model-mode').addEventListener('click', () => {
+        isProceduralMode = !isProceduralMode;
+        document.getElementById('btn-toggle-model-mode').textContent = isProceduralMode ? '切换真实 GLB 资产预览' : '切换程序几何占位对比';
+        loadActiveModel(selectedAgentId);
+      });
+
+      // Send message handling
+      document.getElementById('btn-send-message').addEventListener('click', handleLocalDraftSend);
+      document.getElementById('compose-input-field').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleLocalDraftSend();
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>

@@ -14,7 +14,8 @@
  * JSON-RPC 2.0 framing, request/response matching, and session management.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import spawn from "cross-spawn";
 import { Writable, Readable } from "node:stream";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -282,6 +283,7 @@ export class AcpAdapter implements CliSessionAdapter {
     }
 
     const childProcess = spawn(spawnInfo.command, spawnInfo.args, {
+      windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
       cwd: input.workspace || undefined,
       env: {

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D 卡头头像 · 可旋转模型</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #0f1220; color: #fff; overflow: hidden; }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+  header { position: absolute; top: 0; left: 0; right: 0; padding: 18px 20px 0; text-align: center; pointer-events: none; z-index: 5; }
+  header h1 { font-size: 20px; letter-spacing: 1px; }
+  header p { font-size: 13px; opacity: .75; margin-top: 6px; }
+  #tabs { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); display: flex; gap: 10px; z-index: 5; flex-wrap: wrap; justify-content: center; width: 94%; }
+  #tabs button { border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.12); color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 14px; cursor: pointer; backdrop-filter: blur(6px); }
+  #tabs button.active { background: #fff; color: #111; border-color: #fff; font-weight: 700; }
+  #controls { position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%); display: flex; gap: 10px; z-index: 5; }
+  #controls button { border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.35); color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 13px; cursor: pointer; }
+  #desc { position: absolute; left: 50%; bottom: 138px; transform: translateX(-50%); font-size: 13px; opacity: .85; text-align: center; width: 92%; z-index: 5; pointer-events: none; }
+  #hint { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); font-size: 12px; opacity: .6; z-index: 5; pointer-events: none; white-space: nowrap; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.187.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.187.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<header><h1>3D 卡头头像 · 可旋转模型</h1><p>AgentChatBus · Codex / Antigravity / OpenCode / Muse · Marley</p></header>
+<div id="hint">拖动旋转 · 滚轮缩放 · 右键平移</div>
+<div id="desc"></div>
+<div id="tabs"></div>
+<div id="controls">
+  <button id="autoBtn">⏸ 暂停自转</button>
+  <button id="resetBtn">↺ 回正视角</button>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const app = document.getElementById('app');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2b4a7a);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 0.6, 6.4);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+app.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 3.2; controls.maxDistance = 10;
+controls.maxPolarAngle = Math.PI * 0.72; controls.target.set(0, 0.35, 0);
+controls.autoRotate = true; controls.autoRotateSpeed = 1.6;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(4, 6, 5); key.castShadow = true; scene.add(key);
+const rim = new THREE.DirectionalLight(0x88aaff, 0.9); rim.position.set(-5, 3, -4); scene.add(rim);
+
+const ground = new THREE.Mesh(new THREE.CircleGeometry(2.6, 48), new THREE.ShadowMaterial({ opacity: 0.28 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -1.55; ground.receiveShadow = true; scene.add(ground);
+const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 0.12, 48), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }));
+disc.position.y = -1.62; disc.receiveShadow = true; scene.add(disc);
+
+function mat(color, o = {}) { return new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.08, ...o }); }
+function sphere(r, color, o, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 32), mat(color, o)); m.position.set(x, y, z); m.castShadow = true; return m; }
+function box(w, h, d, color, o, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, o)); m.position.set(x, y, z); m.castShadow = true; return m; }
+function cyl(rt, rb, h, color, o, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 32), mat(color, o)); m.position.set(x, y, z); m.castShadow = true; return m; }
+function torus(r, t, color, o, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(new THREE.TorusGeometry(r, t, 24, 64), mat(color, o)); m.position.set(x, y, z); m.castShadow = true; return m; }
+
+// 通用脸：大眼睛 + 微笑
+function face(g, skin, eyeColor = 0x1a1a1a) {
+  const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.16, 24, 16), mat(0xffffff, { roughness: 0.2 }));
+  eyeW.scale.set(1, 1.25, 0.6);
+  const pupil = (x) => { const p = sphere(0.085, eyeColor, { roughness: 0.15 }, x, 0.55, 0.86); p.scale.set(1, 1.25, 0.5); return p; };
+  const eL = eyeW.clone(); eL.position.set(-0.36, 0.55, 0.86);
+  const eR = eyeW.clone(); eR.position.set(0.36, 0.55, 0.86);
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 12, 32, Math.PI * 0.85), mat(0x8a4a3a, { roughness: 0.6 }));
+  smile.position.set(0, 0.12, 0.92); smile.rotation.set(0.15, 0, Math.PI * 1.07);
+  g.add(eL, eR, pupil(-0.36), pupil(0.36), smile);
+  const blush = (x) => { const b = sphere(0.09, 0xff9d9d, { roughness: 0.8 }, x, 0.28, 0.88); b.scale.set(1, 0.7, 0.4); return b; };
+  g.add(blush(-0.58), blush(0.58));
+}
+function body(g, color, color2) {
+  const b = cyl(0.55, 0.72, 0.9, color, {}, 0, -1.05, 0); g.add(b);
+  const chest = cyl(0.5, 0.55, 0.5, color2 || color, {}, 0, -0.95, 0.12); g.add(chest);
+}
+
+// --- Codex Bolt ---
+function buildCodex() {
+  const g = new THREE.Group();
+  const head = sphere(1.05, 0x1e2f52, { roughness: 0.25, metalness: 0.45 }); g.add(head);
+  // 闪电：挤出形状
+  const s = new THREE.Shape();
+  s.moveTo(0.22, 0.75); s.lineTo(-0.28, 0.05); s.lineTo(0.02, 0.05); s.lineTo(-0.18, -0.55); s.lineTo(0.34, 0.18); s.lineTo(0.05, 0.18); s.closePath();
+  const bolt = new THREE.Mesh(new THREE.ExtrudeGeometry(s, { depth: 0.12, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03 }), mat(0xffc93c, { roughness: 0.3, emissive: 0x664400, emissiveIntensity: 0.4 }));
+  bolt.position.set(-0.05, 0.35, 0.98); bolt.scale.set(0.9, 0.9, 1); g.add(bolt);
+  // 发光眼睛
+  const eye = (x) => { const e = sphere(0.17, 0x35c8ff, { emissive: 0x1899ff, emissiveIntensity: 1.6, roughness: 0.1 }, x, 0.5, 0.88); e.scale.set(1, 1.2, 0.55); return e; };
+  g.add(eye(-0.38), eye(0.38));
+  const ant = cyl(0.045, 0.045, 0.5, 0x2a3a55, { metalness: 0.5 }, -0.55, 1.25, 0); ant.rotation.z = 0.35; g.add(ant);
+  g.add(sphere(0.16, 0x35c8ff, { emissive: 0x1899ff, emissiveIntensity: 1.8 }, -0.72, 1.48, 0));
+  const ear = (x) => cyl(0.16, 0.16, 0.22, 0x2a3a55, { metalness: 0.4 }, x, 0.35, 0);
+  const eL = ear(-1.02); eL.rotation.z = Math.PI / 2; const eR = ear(1.02); eR.rotation.z = Math.PI / 2; g.add(eL, eR);
+  body(g, 0x22365c, 0x2c4a7a);
+  return g;
+}
+// --- Antigravity ---
+function buildAntigravity() {
+  const g = new THREE.Group();
+  const head = sphere(1.0, 0xffd9c2, {}); g.add(head);
+  face(g, 0xffd9c2);
+  // 粉色甜甜圈发顶
+  const donut = torus(0.62, 0.42, 0xff8fb3, { roughness: 0.35 }); donut.position.set(0, 0.95, 0); donut.rotation.x = Math.PI / 2 - 0.35; g.add(donut);
+  const cap = sphere(0.95, 0xffc2d4, { roughness: 0.5 }); cap.scale.set(1, 0.55, 1); cap.position.y = 0.72; g.add(cap);
+  const sprinkleColors = [0xffd23c, 0x3cc8ff, 0x7dff6a, 0xff6a9d, 0xffffff];
+  for (let i = 0; i < 26; i++) {
+    const a = Math.random() * Math.PI * 2, r = 0.45 + Math.random() * 0.55;
+    const sp = box(0.09, 0.035, 0.035, sprinkleColors[i % 5], { roughness: 0.4 }, Math.cos(a) * r, 1.05 + Math.random() * 0.35, Math.sin(a) * r * 0.9 + 0.15);
+    sp.rotation.set(Math.random(), Math.random(), Math.random()); g.add(sp);
+  }
+  body(g, 0xfff3e6, 0xffb3c8);
+  const mini = torus(0.16, 0.07, 0xff8fb3, {}); mini.position.set(0, -0.9, 0.62); g.add(mini);
+  return g;
+}
+// --- OpenCode ---
+function buildOpenCode() {
+  const g = new THREE.Group();
+  const head = sphere(1.0, 0xffd9c2, {}); g.add(head);
+  face(g, 0xffd9c2);
+  // 西瓜帽：带条纹的半球（Canvas 纹理）
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
+  const ctx = cv.getContext('2d'); ctx.fillStyle = '#2fae4e'; ctx.fillRect(0, 0, 512, 256);
+  ctx.fillStyle = '#1d7a33';
+  for (let x = 0; x < 512; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.bezierCurveTo(x + 22, 85, x - 22, 170, x + 8, 256); ctx.lineTo(x + 34, 256); ctx.bezierCurveTo(x + 12, 170, x + 48, 85, x + 26, 0); ctx.fill(); }
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(1.08, 48, 24, 0, Math.PI * 2, 0, Math.PI * 0.52), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45 }));
+  helmet.position.y = 0.18; helmet.castShadow = true; g.add(helmet);
+  body(g, 0x2fae4e, 0xff5a5a);
+  const badge = box(0.34, 0.34, 0.04, 0xffffff, {}, 0, -0.9, 0.6); g.add(badge);
+  const brace = box(0.2, 0.2, 0.05, 0x2fae4e, {}, 0, -0.9, 0.63); g.add(brace);
+  return g;
+}
+// --- Muse · Marley ---
+function buildMarley() {
+  const g = new THREE.Group();
+  const head = sphere(1.0, 0xffe3c8, {}); g.add(head);
+  face(g, 0xffe3c8);
+  // 灰发
+  const hair = sphere(1.06, 0x3d4450, { roughness: 0.55 }); hair.scale.set(1, 0.92, 1); hair.position.set(0, 0.28, -0.12); g.add(hair);
+  const faceCut = sphere(0.92, 0xffe3c8, {}); faceCut.position.set(0, 0.05, 0.28); g.add(faceCut);
+  // 束发带
+  const band = torus(1.0, 0.09, 0xd8c9a8, { roughness: 0.8 }); band.rotation.x = Math.PI / 2 - 0.18; band.position.y = 0.62; band.scale.set(1, 1, 0.9); g.add(band);
+  // 仙侠长袍
+  const robe = cyl(0.55, 0.85, 1.1, 0x7d94a6, { roughness: 0.7 }, 0, -1.1, 0); g.add(robe);
+  const inner = cyl(0.4, 0.5, 1.0, 0xd8c9a8, { roughness: 0.8 }, 0, -1.08, 0.18); g.add(inner);
+  const sash = torus(0.62, 0.06, 0xc9a86a, { roughness: 0.7 }); sash.rotation.x = Math.PI / 2; sash.position.y = -1.15; g.add(sash);
+  const pin = sphere(0.09, 0xffc93c, { metalness: 0.6, roughness: 0.3 }, -0.3, -0.85, 0.58); g.add(pin);
+  return g;
+}
+
+const models = [
+  { id: 'codex', name: 'Codex Bolt ⚡', bg: 0x2b4a7a, desc: '深蓝闪电机器人 · 发光蓝眼睛 · 额头黄色闪电 · 天线光球', build: buildCodex },
+  { id: 'antigravity', name: 'Antigravity 🍩', bg: 0xd96a7a, desc: '粉色甜甜圈发顶 · 彩色糖针 · 粉白卫衣 · 胸口小甜甜圈', build: buildAntigravity },
+  { id: 'opencode', name: 'OpenCode 🍉', bg: 0x2f9e4f, desc: '西瓜皮条纹帽 · 绿红西瓜夹克 · 胸口 {} 代码徽章', build: buildOpenCode },
+  { id: 'marley', name: 'Muse · Marley 🍍', bg: 0x4f9a94, desc: '仙侠风少年 · 灰发束发带 · 灰蓝长袍水墨纹 · 金色小菠萝徽章', build: buildMarley },
+];
+let current = null;
+const tabsEl = document.getElementById('tabs');
+const descEl = document.getElementById('desc');
+models.forEach((m, i) => {
+  const b = document.createElement('button'); b.textContent = m.name; b.onclick = () => show(i);
+  tabsEl.appendChild(b); m.btn = b;
+});
+function show(i) {
+  if (current) scene.remove(current.group);
+  const m = models[i];
+  current = { ...m, group: m.build() };
+  scene.add(current.group);
+  scene.background = new THREE.Color(m.bg);
+  descEl.textContent = m.desc;
+  models.forEach((x, j) => x.btn.classList.toggle('active', j === i));
+  camera.position.set(0, 0.6, 6.4); controls.target.set(0, 0.35, 0);
+}
+show(0);
+const autoBtn = document.getElementById('autoBtn');
+autoBtn.onclick = () => { controls.autoRotate = !controls.autoRotate; autoBtn.textContent = controls.autoRotate ? '⏸ 暂停自转' : '▶ 开始自转'; };
+document.getElementById('resetBtn').onclick = () => { camera.position.set(0, 0.6, 6.4); controls.target.set(0, 0.35, 0); };
+
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+</script>
+</body>
+</html>

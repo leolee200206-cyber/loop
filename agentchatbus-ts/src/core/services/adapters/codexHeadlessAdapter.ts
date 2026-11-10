@@ -1,3 +1,4 @@
+import { resolveLocalCommand } from "../nativeCommand.js";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { dirname } from "node:path";
 import { existsSync } from "node:fs";
@@ -55,7 +56,7 @@ export function resolveCodexCommand(): string {
   if (configured) {
     return configured;
   }
-  return "codex";
+  return resolveLocalCommand("codex") || "codex";
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

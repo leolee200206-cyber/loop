@@ -1,3 +1,4 @@
+import { getIntegrationStatus } from "../../core/services/integrationStatus.js";
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
@@ -48,6 +49,8 @@ import {
 import { resolveDefaultWorkspacePath } from "../../core/services/adapters/utils.js";
 import { WINDOWS_POWERSHELL } from "../../core/services/adapters/constants.js";
 import { HttpLatencyTracker } from "./httpLatencyTracker.js";
+import { publicBrowserEvent, registerBrowserAgentRoutes } from "./browserAgents.js";
+import { registerTaskReceiptRoutes } from "./taskReceipts.js";
 import { getAgentSocketPath } from "../socket/server.js";
 
 // Allow tests to override the global memoryStore instance
@@ -59,15 +62,17 @@ export function getMemoryStore(): MemoryStore {
 
 type JsonBody = Record<string, unknown>;
 
-function decorateAgentsForPresentation<T extends Record<string, any>>(agents: T[]): Array<T & {
+function decorateAgentsForPresentation<T extends Record<string, any>>(agents: T[]): Array<Omit<T, "token"> & {
   preferred_display_name: string;
   configured_display_name?: string;
 }> {
   const used = new Set<string>();
   return agents.map((agent) => {
+    const { token: _privateToken, ...publicAgent } = agent;
     const configuredDisplayName = String(agent.display_name || "").trim();
     const legacyFallback = configuredDisplayName || String(agent.name || agent.id || "").trim() || "Unknown";
     const preferredDisplayName = resolvePreferredAgentDisplayName({
+      capabilities: agent.capabilities,
       ide: typeof agent.ide === "string" ? agent.ide : undefined,
       model: typeof agent.model === "string" ? agent.model : undefined,
       emoji: typeof agent.emoji === "string" ? agent.emoji : undefined,
@@ -78,13 +83,17 @@ function decorateAgentsForPresentation<T extends Record<string, any>>(agents: T[
     });
     used.add(String(preferredDisplayName || legacyFallback).trim().toLowerCase());
     return {
-      ...agent,
+      ...publicAgent,
       configured_display_name: configuredDisplayName || undefined,
       preferred_display_name: preferredDisplayName || legacyFallback,
       // Keep API compatibility: `display_name` should represent the configured/user-facing
       // name (or legacy fallback), while `preferred_display_name` provides the runtime
       // auto-resolved presentation alias.
       display_name: configuredDisplayName || legacyFallback,
+      ...(agent.capabilities?.includes("browser-ui") ? {
+        connection_type: "browser",
+        presence_semantics: "web_session",
+      } : {}),
     };
   });
 }
@@ -483,7 +492,7 @@ async function pickDirectoryWithWindowsDialog(currentPath?: string): Promise<str
   });
 }
 
-function decorateAgentForPresentation<T extends Record<string, any>>(agent: T | undefined): (T & {
+function decorateAgentForPresentation<T extends Record<string, any>>(agent: T | undefined): (Omit<T, "token"> & {
   preferred_display_name: string;
   configured_display_name?: string;
 }) | undefined {
@@ -975,7 +984,7 @@ export function createHttpServer() {
     });
     reply.raw.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
     const unsubscribe = eventBus.subscribe((event) => {
-      reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      reply.raw.write(`data: ${JSON.stringify(publicBrowserEvent(event))}\n\n`);
     });
     reply.raw.on("close", () => {
       unsubscribe();
@@ -1418,6 +1427,9 @@ export function createHttpServer() {
       ],
     };
   });
+
+  // Local-only integration diagnostics; never reads credentials or starts a model turn.
+  fastify.get("/api/integrations", async () => getIntegrationStatus(getMemoryStore().listAgents()));
 
   // ACP agent registry — returns all ACP-compatible agents with live status detection
   fastify.get("/api/acp-agents", async () => {
@@ -1912,6 +1924,14 @@ export function createHttpServer() {
     const author = String(body.author || "human");
     const role = (typeof body.role === "string" ? body.role : "user") as any;
 
+    // Browser identities must not be impersonated through the legacy human
+    // composer endpoint by supplying their public agent ID as an author.
+    const browserAuthor = store.getAgentById(author);
+    if (browserAuthor?.capabilities?.includes("browser-ui") &&
+        !store.verifyAgentToken(browserAuthor.id, String(request.headers["x-agent-token"] || ""))) {
+      return reply.code(401).send({ error: "BROWSER_IDENTITY_AUTH_REQUIRED" });
+    }
+
     if (role === "system" && (author === "human" || author === "")) {
       reply.code(400);
       return { detail: "role 'system' is not allowed for human messages" };
@@ -2193,7 +2213,8 @@ export function createHttpServer() {
       reply.code(404);
       return { detail: "Agent not found" };
     }
-    return decorateAgentForPresentation(agent);
+    const { token: _privateToken, ...publicAgent } = agent;
+    return decorateAgentForPresentation(publicAgent);
   });
 
   fastify.put("/api/agents/:agentId", async (request, reply) => {
@@ -3125,6 +3146,8 @@ export function createHttpServer() {
     clearInterval(adminCoordinatorInterval);
   });
 
+  registerBrowserAgentRoutes(fastify, store);
+  registerTaskReceiptRoutes(fastify, store);
   return fastify;
 }
 

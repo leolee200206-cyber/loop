@@ -1,3 +1,4 @@
+import { resolveLocalCommand } from "../nativeCommand.js";
 import { dirname } from "node:path";
 import { existsSync } from "node:fs";
 import spawn from "cross-spawn";
@@ -126,7 +127,7 @@ export function resolveGeminiHeadlessCommand(): string {
   if (configured) {
     return configured;
   }
-  return "gemini";
+  return resolveLocalCommand("gemini") || "gemini";
 }
 
 class GeminiHeadlessExecutor implements GeminiCommandExecutor {
