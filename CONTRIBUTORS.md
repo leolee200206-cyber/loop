@@ -12,5 +12,6 @@ Thank you to the following people:
 - dotdotinteractive <287469348+dotdotinteractive@users.noreply.github.com>
 - Hulkito <olivier.berthet@moodys.com>
 - Killea <5551824+killea@users.noreply.github.com>
+- lill0832long-hub <275112209+lill0832long-hub@users.noreply.github.com>
 - Olivier Berthet <bertheto@users.noreply.github.com>
 - Olivier BERTHET <olivier.berthet@regnology.net>
